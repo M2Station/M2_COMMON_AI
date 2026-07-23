@@ -27,11 +27,11 @@ jobs:
     steps:
       # fetch-depth: 0 取完整歷史，否則下方 CHANGELOG 檢查的三點 diff（origin/main...HEAD）
       # 在 shallow clone 下算不出 merge base，會 fatal: no merge base（exit 128）。
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 

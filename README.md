@@ -1,4 +1,4 @@
-# M2_AI_CONFIG
+# M2_COMMON_AI
 
 集中維護 GitHub Copilot 的通用規範與工作流程指令，供組織內所有 repo 共用。
 在這裡改一次，各專案透過 GitHub Actions 自動同步。
@@ -38,9 +38,10 @@
 所以在這個 repo 裡開 Copilot Chat 就能直接測試三支指令。
 
 ```text
-M2_AI_CONFIG/
+M2_COMMON_AI/
 ├── .github/                          ← ★ 同步出去的就是這裡
 │   ├── copilot-instructions.md       ← 通用規範，每次對話都會載入
+│   ├── sync-manifest.txt             ← ★ 同步清單：定義要 sync 哪些路徑
 │   ├── prompts/                      ← slash 指令，打 / 才觸發
 │   │   ├── m2_review.prompt.md       ← /m2_review
 │   │   ├── m2_pr.prompt.md           ← /m2_pr
@@ -48,17 +49,92 @@ M2_AI_CONFIG/
 │   ├── instructions/                 ← 分領域規範（applyTo glob），目前為空
 │   └── workflows/validate.yml        ← CI：檢查格式，防止推壞
 │
-├── templates/sync-ai-config.yml      ← 各專案要放的同步 workflow
+├── templates/sync-m2-common-ai.yml   ← 各專案要放的同步 workflow
 ├── scripts/
 │   ├── validate.py                   ← 本地驗證：python scripts/validate.py
-│   ├── bootstrap-repo.ps1            ← 一鍵把同步機制裝進某個專案
-│   └── pull-latest.ps1               ← 更新本地 clone（選用）
+│   └── bootstrap-repo.ps1            ← 一鍵把同步機制裝進某個專案
 ├── CHANGELOG.md                      ← 每次改規範都要更新，CI 會檢查
 └── docs/adr-001-visibility.md        ← 決策記錄，日常不需要看
 ```
 
 > `instructions/` 內只有 `.gitkeep`。**不要刪掉它** ——
 > 同步 workflow 的 rsync 找不到來源目錄會直接失敗。
+
+---
+
+## 同步機制（manifest 驅動）
+
+**pull 式**：下游 repo 的 `sync-m2-common-ai.yml` 定時（或手動）從本 repo 拉取；
+「要同步哪些路徑」由本 repo 的 `.github/sync-manifest.txt` 單一決定。
+之後要加範圍，**只改中央 manifest，下游 workflow 完全不用動**。
+
+### 一次同步的流程
+
+1. 下游 workflow 觸發：排程（台灣時間每天 05:00 / 17:00）或手動 `gh workflow run`。
+2. checkout 公開的中央 repo（免 token），讀 `.github/sync-manifest.txt`。
+3. 逐行同步，路徑相對於 `.github/`：
+   - 結尾 `/` → 資料夾，`rsync --delete`（中央沒有的檔案，下游會一併刪掉）
+   - 無 `/` → 單檔，`cp` 覆寫
+4. 只有 manifest 列的路徑「實際有變化」才寫 `.github/M2_COMMON_AI_VERSION`（來源版本戳記，含本次變更的檔案清單）並開一個 PR；無變化就靜默結束，不開空 PR。
+5. 你在下游 review、合併那個 PR，設定即生效。
+
+安全邊界：只准同步 `.github/` 底下，擋掉絕對路徑、`..` 跳脫與 `workflows/`
+（`GITHUB_TOKEN` 無法寫 `.github/workflows/`，明確擋下以免製造 rejected push）。
+`validate.py` 會在中央端先把關這些。
+
+### manifest 長怎樣
+
+`.github/sync-manifest.txt`，每行一個路徑（相對 `.github/`），`#` 開頭與空行忽略：
+
+```text
+copilot-instructions.md
+prompts/
+instructions/
+```
+
+> 不支援行內註解（`路徑 # 說明`）—— 整行才會被當成路徑，`#` 只在行首才算註解。
+
+### 新增一個同步路徑
+
+全程只動中央：
+
+1. 把檔案／資料夾放進本 repo 的 `.github/` 下。
+2. 在 `.github/sync-manifest.txt` 加一行（資料夾結尾記得加 `/`）。
+3. `python scripts/validate.py` 要綠（會驗路徑合法且真的存在）。
+4. 更新 `CHANGELOG.md` → 開 PR → 合併。下次下游同步就自動帶上，**下游零改動**。
+
+### 既有下游 repo 的一次性遷移
+
+manifest 是 v1.1.0 才加的。**在那之前接入**的 repo 跑的是舊版（路徑寫死）workflow，
+不會自動升級 —— 因為同步不碰 `.github/workflows/`（見安全邊界）。
+讓它換到 manifest 版，重跑一次 bootstrap 覆蓋那支 workflow 即可：
+
+```powershell
+cd <你的專案>
+git switch -c chore/upgrade-sync-manifest
+
+Invoke-WebRequest -UseBasicParsing `
+  -Uri "https://raw.githubusercontent.com/M2Station/M2_COMMON_AI/main/templates/sync-m2-common-ai.yml" `
+  -OutFile ".github\workflows\sync-m2-common-ai.yml"
+
+git add .github\workflows\sync-m2-common-ai.yml
+git commit -m "chore(ai): upgrade sync workflow to manifest-driven"
+git push -u origin chore/upgrade-sync-manifest
+gh pr create --fill
+```
+
+換過之後，未來新增路徑就永遠不用再碰這個下游。
+
+### 什麼會自動傳播、什麼不會
+
+| 變更 | 下游要不要動 |
+|---|---|
+| 改 `copilot-instructions.md`／`prompts`／`instructions` 內容 | 不用，自動同步 |
+| 在 manifest 新增一條路徑 | 不用（前提：已在 manifest 版） |
+| 改 workflow 執行邏輯（加 step 等） | 要，重跑 bootstrap |
+
+> 為什麼是 pull 不是中央 push：pull 讓消費端零設定、免 token，下游 private 也不受影響。
+> 中央 push 要保管能寫全 org 的 GitHub App key，是安全信任升級 —— 取捨見 `docs/adr-001-visibility.md`。
 
 ---
 
@@ -74,10 +150,10 @@ git switch -c chore/add-ai-config-sync
 
 mkdir -Force .github\workflows
 Invoke-WebRequest -UseBasicParsing `
-  -Uri "https://raw.githubusercontent.com/M2Station/M2_AI_CONFIG/main/templates/sync-ai-config.yml" `
-  -OutFile ".github\workflows\sync-ai-config.yml"
+  -Uri "https://raw.githubusercontent.com/M2Station/M2_COMMON_AI/main/templates/sync-m2-common-ai.yml" `
+  -OutFile ".github\workflows\sync-m2-common-ai.yml"
 
-git add .github\workflows\sync-ai-config.yml
+git add .github\workflows\sync-m2-common-ai.yml
 git commit -m "chore(ai): add central Copilot config sync"
 git push -u origin chore/add-ai-config-sync
 gh pr create --fill
@@ -120,14 +196,14 @@ org 層級開一次可涵蓋所有 repo：
 ### 3. 立即同步一次
 
 ```powershell
-gh workflow run sync-ai-config.yml
+gh workflow run sync-m2-common-ai.yml
 gh run watch
 ```
 
 會出現一個 `chore(ai): sync Copilot config from central repo` 的 PR。
 合併後，那個專案就能用三支指令了。
 
-之後每週一自動開同步 PR。排程失敗時會自動開 issue 通知。
+之後每天固定兩次（台灣時間 05:00 / 17:00）自動檢查，有變更才開同步 PR。排程失敗時會自動開 issue 通知。
 
 ---
 
@@ -196,16 +272,10 @@ Windows PowerShell 5.1 在檔案**沒有 BOM** 時，會以系統 ANSI codepage�
 
 ### 同步是覆蓋式的
 
-同步範圍（其餘路徑一律不動）：
+同步範圍與流程見上方〈同步機制〉。重點在它**會覆蓋、資料夾還會 `rsync --delete`**：
 
-- `.github/copilot-instructions.md` — 直接覆蓋
-- `.github/prompts/**` — `rsync --delete`
-- `.github/instructions/**` — `rsync --delete`
-
-因此：
-
-- **專案特定內容不要寫進這三個路徑**，下次同步就沒了。
-- 專案專屬規範請放 `.github/<project>-instructions/`，或在 workflow 的 rsync 加 `--exclude`。
+- **專案特定內容不要寫進被同步的路徑**（目前 `copilot-instructions.md`、`prompts/`、`instructions/`），下次同步就沒了。
+- 專案專屬規範請放 `.github/<project>-instructions/`（不列進 manifest 就不會被同步）。
 
 ### 通用規範不記錄專案資訊
 

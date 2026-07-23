@@ -1,0 +1,17 @@
+# M2_COMMON_AI 同步清單（single source of truth）
+#
+# 下游 repo 的 sync-m2-common-ai.yml 會讀這個檔，決定要從中央同步哪些路徑。
+# 之後要新增同步範圍，只改這裡；下游 workflow 完全不用動
+# （已接入的 repo 需先重跑一次 bootstrap，換到讀 manifest 的版本）。
+#
+# 規則：
+#   - 每行一個路徑，相對於 .github/
+#   - 行尾加 / → 資料夾，用 rsync --delete（中央沒有的檔案，下游會被刪）
+#   - 沒有 /   → 單一檔案，用 cp 覆蓋
+#   - # 開頭為註解，空行忽略
+#   - 只允許 .github/ 底下；不得含 .. 或絕對路徑；不得同步 workflows/
+#     （GITHUB_TOKEN 無法寫入 .github/workflows/，會導致 push 被拒）
+
+copilot-instructions.md
+prompts/
+instructions/

@@ -3,7 +3,7 @@
     把中央 AI config 的同步機制安裝進一個 repo。
 
 .DESCRIPTION
-    在目標 repo 建立 .github/workflows/sync-ai-config.yml 並開一個 PR。
+    在目標 repo 建立 .github/workflows/sync-m2-common-ai.yml 並開一個 PR。
 
     中央 repo 為 public，因此不需要任何 token、secret 或 variable ——
     本腳本只負責放檔案與開 PR。
@@ -14,7 +14,7 @@
     目標 repo 的本地路徑。預設為當前目錄。
 
 .PARAMETER CentralRepo
-    中央 repo，格式 owner/name。預設 M2Station/M2_AI_CONFIG。
+    中央 repo，格式 owner/name。預設 M2Station/M2_COMMON_AI。
 
 .PARAMETER RunNow
     安裝後立即觸發一次同步（需搭配 -NoPr，workflow 必須先存在於預設分支）。
@@ -32,14 +32,14 @@
 [CmdletBinding()]
 param(
     [string]$Path = (Get-Location).Path,
-    [ValidatePattern('^[\w.-]+/[\w.-]+$')][string]$CentralRepo = 'M2Station/M2_AI_CONFIG',
+    [ValidatePattern('^[\w.-]+/[\w.-]+$')][string]$CentralRepo = 'M2Station/M2_COMMON_AI',
     [switch]$RunNow,
     [switch]$NoPr
 )
 
 $ErrorActionPreference = 'Stop'
 $BranchName = 'chore/add-ai-config-sync'
-$WorkflowPath = '.github/workflows/sync-ai-config.yml'
+$WorkflowPath = '.github/workflows/sync-m2-common-ai.yml'
 
 function Write-Step { param($m) Write-Host "`n==> $m" -ForegroundColor Cyan }
 function Write-Ok   { param($m) Write-Host "    OK   $m" -ForegroundColor Green }
@@ -84,7 +84,7 @@ try {
     # ---------- 取得 workflow 範本 ----------
     Write-Step '取得同步 workflow 範本'
 
-    $rawUrl = "https://raw.githubusercontent.com/$CentralRepo/main/templates/sync-ai-config.yml"
+    $rawUrl = "https://raw.githubusercontent.com/$CentralRepo/main/templates/sync-m2-common-ai.yml"
     $tmp = New-TemporaryFile
     try {
         Invoke-WebRequest -Uri $rawUrl -OutFile $tmp -UseBasicParsing
@@ -94,8 +94,8 @@ try {
         Fail "下載失敗（$rawUrl）。請確認中央 repo 為 public 且路徑正確。原始錯誤：$($_.Exception.Message)"
     }
 
-    if ((Get-Content $tmp -Raw) -notmatch 'Sync AI Config') {
-        Fail '下載到的範本內容不正確，請確認中央 repo 的 templates/sync-ai-config.yml'
+    if ((Get-Content $tmp -Raw) -notmatch 'Sync M2 Common AI') {
+        Fail '下載到的範本內容不正確，請確認中央 repo 的 templates/sync-m2-common-ai.yml'
     }
 
     # ---------- 寫入檔案 ----------
@@ -114,7 +114,7 @@ try {
     Write-Ok $WorkflowPath
 
     # 中央 repo 非預設值時才需要設變數
-    if ($CentralRepo -ne 'M2Station/M2_AI_CONFIG') {
+    if ($CentralRepo -ne 'M2Station/M2_COMMON_AI') {
         gh variable set CENTRAL_AI_REPO --body $CentralRepo 2>&1 | Out-Null
         if ($LASTEXITCODE -eq 0) { Write-Ok "CENTRAL_AI_REPO = $CentralRepo" }
         else { Write-Warn '設定 CENTRAL_AI_REPO 失敗，請確認你對該 repo 有 admin 權限' }
@@ -147,7 +147,7 @@ try {
 
 ## 合併後還需要做
 - [ ] Settings -> Actions -> General -> 勾選「Allow GitHub Actions to create and approve pull requests」
-- [ ] 手動觸發一次：``gh workflow run sync-ai-config.yml``
+- [ ] 手動觸發一次：``gh workflow run sync-m2-common-ai.yml``
 "@
         $prUrl = gh pr create --base $originalBranch --title 'chore(ai): add central Copilot config sync' --body $body
         Write-Ok "PR 已建立：$prUrl"
@@ -159,14 +159,14 @@ try {
     後續步驟：
       1. Settings -> Actions -> General
          勾選「Allow GitHub Actions to create and approve pull requests」
-      2. 合併後手動跑一次：gh workflow run sync-ai-config.yml
+      2. 合併後手動跑一次：gh workflow run sync-m2-common-ai.yml
       3. 同步 PR 合併後即可使用 /m2_review、/m2_pr、/m2_release
 "@ -ForegroundColor Gray
 
     if ($RunNow) {
         if ($NoPr) {
             Write-Step '觸發首次同步'
-            gh workflow run sync-ai-config.yml
+            gh workflow run sync-m2-common-ai.yml
             if ($LASTEXITCODE -eq 0) { Write-Ok '已觸發，用 gh run watch 追蹤' }
             else { Write-Warn '觸發失敗，可能是 workflow 尚未出現在預設分支上' }
         }

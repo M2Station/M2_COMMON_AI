@@ -113,7 +113,7 @@
 
 ### GitHub App 的 workflow 改法
 
-若選 B / C，把 `sync-ai-config.yml` 的 checkout 段換成：
+若選 B / C，把 `sync-m2-common-ai.yml` 的 checkout 段換成：
 
 ```yaml
       - name: Mint GitHub App token

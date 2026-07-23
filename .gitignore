@@ -1,0 +1,33 @@
+# ── 憑證：絕對不可進版控 ────────────────────────────────
+*.pem
+*.key
+*.p12
+*.pfx
+.env
+.env.*
+!.env.example
+
+# ── 作業系統 ────────────────────────────────────────
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+$RECYCLE.BIN/
+
+# ── 編輯器 ──────────────────────────────────────────
+.vscode/*
+!.vscode/settings.json.example
+.idea/
+*.swp
+*~
+
+# ── Python（validate.py）───────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ── 暫存 ────────────────────────────────────────────
+*.log
+*.tmp
+.central/

@@ -1,0 +1,135 @@
+name: Sync AI Config
+
+# 從中央 repo（private）同步 Copilot 設定（prompts / instructions）到本 repo。
+# 放置路徑：.github/workflows/sync-ai-config.yml
+#
+# ── 需要的設定（全部設在 org 層級，只設一次，所有 repo 共用）──────────────
+#   Variables:
+#     CENTRAL_AI_REPO        中央 repo，例：M2Station/M2_AI_CONFIG
+#     AI_CONFIG_APP_CLIENT_ID  GitHub App 的 Client ID
+#   Secrets:
+#     AI_CONFIG_APP_KEY      GitHub App 的 private key（.pem 全文）
+#   Org Settings → Actions → General:
+#     勾選 Allow GitHub Actions to create and approve pull requests
+#
+#   GitHub App（m2-ai-config-sync）只需 Repository permissions → Contents: Read-only，
+#   且只安裝到中央 repo 一個。token 每次執行換發、1 小時後失效，不會過期。
+#   詳見中央 repo 的 docs/adr-001-visibility.md
+# ─────────────────────────────────────────────────────────────────────
+
+on:
+  schedule:
+    - cron: '0 1 * * 1'        # 每週一 09:00 (UTC+8)
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: '中央 repo 的 branch / tag（預設 main）'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      # 從 CENTRAL_AI_REPO 取出 repo 名稱（App token 的 repositories 只吃名稱，不吃 owner/name）
+      # 由單一變數推導，避免中央 repo 更名時有一處漏改。
+      - name: Resolve central repo name
+        id: central
+        env:
+          CENTRAL: ${{ vars.CENTRAL_AI_REPO }}
+        run: |
+          if [ -z "$CENTRAL" ]; then
+            echo "::error::CENTRAL_AI_REPO 未設定（應在 org 層級設定）"; exit 1
+          fi
+          echo "name=${CENTRAL##*/}" >> "$GITHUB_OUTPUT"
+
+      # 換發短期 installation token。私鑰不會過期，故無需定期輪替。
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.AI_CONFIG_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AI_CONFIG_APP_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ steps.central.outputs.name }}   # 僅授權讀取中央 repo
+
+      - name: Checkout central AI config
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.CENTRAL_AI_REPO }}
+          ref: ${{ inputs.ref || 'main' }}
+          token: ${{ steps.app-token.outputs.token }}
+          path: .central
+
+      - name: Sync files
+        run: |
+          set -euo pipefail
+          mkdir -p .github/prompts .github/instructions
+
+          # 只同步這些路徑；其餘一概不動
+          # 中央 repo 的 source of truth 就是它自己的 .github/（dogfooding）
+          rsync -av --delete .central/.github/prompts/      .github/prompts/
+          rsync -av --delete .central/.github/instructions/ .github/instructions/
+          cp .central/.github/copilot-instructions.md       .github/copilot-instructions.md
+
+          # 記錄來源版本，便於追溯
+          {
+            echo "source_repo: ${{ vars.CENTRAL_AI_REPO }}"
+            echo "source_ref:  ${{ inputs.ref || 'main' }}"
+            echo "source_sha:  $(git -C .central rev-parse HEAD)"
+            echo "synced_at:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > .github/AI_CONFIG_VERSION
+
+          rm -rf .central
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ github.token }}
+          branch: chore/sync-ai-config
+          delete-branch: true
+          commit-message: 'chore(ai): sync Copilot config from central repo'
+          title: 'chore(ai): sync Copilot config from central repo'
+          body: |
+            由 `sync-ai-config` workflow 自動產生。
+
+            ## What
+            從中央 repo `${{ vars.CENTRAL_AI_REPO }}` 同步 Copilot 設定檔。
+
+            ## 同步範圍
+            - `.github/copilot-instructions.md`
+            - `.github/prompts/**`
+            - `.github/instructions/**`
+
+            ## Why
+            集中維護通用規範與 prompt files，避免各 repo 各自分歧。
+
+            ## Verification
+            - [ ] diff 僅包含上述路徑
+            - [ ] 本 repo 專屬的規範未被覆蓋（專案特定內容不應放在這些檔案中）
+
+            來源版本見 `.github/AI_CONFIG_VERSION`。
+          labels: |
+            chore
+            automated
+
+      # 排程失敗通常沒人看 —— 明確開 issue 通知
+      - name: Open issue on failure
+        if: failure() && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'AI config 同步失敗',
+              body: `排程同步失敗，請檢查 GitHub App 是否仍安裝於中央 repo。\n\n[查看執行紀錄](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              labels: ['chore', 'automated']
+            });

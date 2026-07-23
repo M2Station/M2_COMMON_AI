@@ -1,0 +1,63 @@
+name: Validate AI Config
+
+# 中央 repo 專用：任何設定檔變更都必須通過驗證才能合併。
+# 放置路徑：.github/workflows/validate.yml
+#
+# 這支 workflow 是整套機制的保險絲 —— frontmatter 寫壞會讓所有下游 repo 的
+# slash command 一起失效，因此設為必要檢查（Settings → Branches → Require status checks）。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - '.github/copilot-instructions.md'
+      - '.github/prompts/**'
+      - '.github/instructions/**'
+      - 'scripts/validate.py'
+      - 'templates/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate config files
+        run: python scripts/validate.py
+
+      - name: Validate sync workflow template is parseable
+        run: |
+          python - <<'PY'
+          import sys, pathlib
+          try:
+              import yaml
+          except ImportError:
+              sys.exit(0)          # PyYAML 不在預設環境時略過，非致命
+          p = pathlib.Path('templates/sync-ai-config.yml')
+          if not p.exists():
+              print(f'FAIL 缺少 {p}'); sys.exit(1)
+          yaml.safe_load(p.read_text(encoding='utf-8'))
+          print(f'OK  {p} 語法正確')
+          PY
+
+      - name: Check CHANGELOG updated
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -qE '^\.github/(copilot-instructions\.md|prompts/|instructions/)'; then
+            if ! echo "$CHANGED" | grep -q '^CHANGELOG.md'; then
+              echo "::error::規範有變更但 CHANGELOG.md 未更新 —— 下游 repo 需要據此判斷是否升級"
+              exit 1
+            fi
+          fi

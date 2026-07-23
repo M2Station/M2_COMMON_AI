@@ -46,7 +46,7 @@ jobs:
               import yaml
           except ImportError:
               sys.exit(0)          # PyYAML 不在預設環境時略過，非致命
-          p = pathlib.Path('templates/sync-ai-config.yml')
+          p = pathlib.Path('templates/sync-m2-common-ai.yml')
           if not p.exists():
               print(f'FAIL 缺少 {p}'); sys.exit(1)
           yaml.safe_load(p.read_text(encoding='utf-8'))

@@ -14,6 +14,7 @@ CI 執行： 由 .github/workflows/validate.yml 呼叫
   5. instructions file 含 applyTo
   6. copilot-instructions.md 的路由表涵蓋所有 prompt file
   7. 全檔無明顯機密字樣
+  8. sync-manifest.txt 存在、路徑合法且指向實際存在的檔案／資料夾
 
 退出碼：0 = 通過，1 = 有錯誤（警告不影響退出碼）
 """
@@ -32,6 +33,7 @@ REQUIRED_FILES = [
 ]
 PROMPT_DIR = GH / "prompts"
 INSTRUCTION_DIR = GH / "instructions"
+MANIFEST = GH / "sync-manifest.txt"
 
 VALID_MODES = {"ask", "edit", "agent"}
 DESC_MAX = 300
@@ -159,10 +161,43 @@ def check_powershell(path: Path) -> None:
                       "Windows PowerShell 5.1 會以 cp950 解析而導致亂碼與語法錯誤")
 
 
+def check_manifest() -> None:
+    """驗證 .github/sync-manifest.txt：下游 sync workflow 據此決定同步範圍。
+    路徑須相對於 .github/、不得跳脫或指向 workflows/，且必須實際存在。"""
+    if not MANIFEST.exists():
+        errors.append(f"缺少必要檔案：{MANIFEST.relative_to(ROOT)}")
+        return
+    text = MANIFEST.read_text(encoding="utf-8")
+    check_secrets(MANIFEST, text)
+
+    valid = 0
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        valid += 1
+        if line.startswith("/") or ".." in line:
+            err(MANIFEST, f"路徑不合法（不得為絕對路徑或含 ..）：{line!r}")
+            continue
+        if line == "workflows/" or line.startswith("workflows/"):
+            err(MANIFEST, f"不允許同步 workflows/（GITHUB_TOKEN 無法寫入）：{line!r}")
+            continue
+        target = GH / line
+        if line.endswith("/"):
+            if not target.is_dir():
+                err(MANIFEST, f"列出的資料夾在中央不存在：.github/{line}")
+        elif not target.is_file():
+            err(MANIFEST, f"列出的檔案在中央不存在：.github/{line}")
+    if valid == 0:
+        err(MANIFEST, "manifest 沒有任何有效路徑")
+
+
 def main() -> int:
     for f in REQUIRED_FILES:
         if not f.exists():
             errors.append(f"缺少必要檔案：{f.relative_to(ROOT)}")
+
+    check_manifest()
 
     for p in sorted((ROOT / "scripts").glob("*.ps1")):
         check_powershell(p)

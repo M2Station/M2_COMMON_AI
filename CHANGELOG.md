@@ -12,6 +12,23 @@
 
 ---
 
+## v1.1.0 — 2026-07-23
+
+### 變更
+
+- 同步機制改為 **manifest 驅動**：下游 `sync-m2-common-ai.yml` 改讀中央
+  `.github/sync-manifest.txt` 決定同步範圍。之後新增同步路徑只需改中央 manifest，
+  下游 workflow 不必再修改（已接入的 repo 需重跑一次 bootstrap 換到此版本）。
+- 版本記錄檔更名 `.github/AI_CONFIG_VERSION` → `.github/M2_COMMON_AI_VERSION`，
+  並新增 `changed_files` 欄位記錄本次同步實際變更的檔案；同步時會順手移除舊檔。
+
+### 新增
+
+- `.github/sync-manifest.txt` — 同步清單（single source of truth）。
+- `scripts/validate.py` 新增 manifest 驗證（路徑合法性與存在性）。
+
+---
+
 ## v1.0.0 — 2026-07-23
 
 初版。
@@ -27,12 +44,11 @@
 - `.github/prompts/m2_release.prompt.md` — `/m2_release`，
   版本 bump → PR → merge → tag → CI publish。
   版號規則：patch 逐一遞增，滿 9 進位到 minor。
-- `templates/sync-ai-config.yml` — 下游 repo 的同步 workflow。
+- `templates/sync-m2-common-ai.yml` — 下游 repo 的同步 workflow。
   中央 repo 為 public，故不需任何 token / secret / variable；
   排程失敗時自動開 issue。
 - `scripts/validate.py` — 設定檔結構與 frontmatter 驗證。
 - `scripts/bootstrap-repo.ps1` — 一鍵將同步機制安裝進指定 repo。
-- `scripts/pull-latest.ps1` — 更新本地 clone（VS Code 路徑方案用）。
 - `docs/adr-001-visibility.md` — visibility 決策記錄，決議為 Private + GitHub App。
 
 ### 決策

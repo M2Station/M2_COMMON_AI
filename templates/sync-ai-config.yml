@@ -57,6 +57,7 @@ jobs:
           path: .central
 
       - name: Sync files
+        id: sync
         env:
           # 透過環境變數傳入使用者可控的 ref，避免 ${{ }} 直接內插進 shell 造成 script injection
           SOURCE_REF: ${{ inputs.ref || 'main' }}
@@ -70,17 +71,31 @@ jobs:
           rsync -av --delete .central/.github/instructions/ .github/instructions/
           cp .central/.github/copilot-instructions.md       .github/copilot-instructions.md
 
-          # 記錄來源版本，便於追溯
-          {
-            echo "source_repo: ${CENTRAL_AI_REPO}"
-            echo "source_ref:  ${SOURCE_REF}"
-            echo "source_sha:  $(git -C .central rev-parse HEAD)"
-            echo "synced_at:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          } > .github/AI_CONFIG_VERSION
-
+          source_sha="$(git -C .central rev-parse HEAD)"
           rm -rf .central
 
+          # 只在「實際同步的三個路徑」有變化時才寫 version 檔並開 PR。
+          # AI_CONFIG_VERSION 內含 synced_at 時戳，若每跑都寫會製造假 diff、每次都開空 PR；
+          # 故先比對內容，相同就 changed=false，下一步略過開 PR。
+          if git status --porcelain -- \
+               .github/copilot-instructions.md \
+               .github/prompts \
+               .github/instructions | grep -q .; then
+            # 記錄來源版本，便於追溯
+            {
+              echo "source_repo: ${CENTRAL_AI_REPO}"
+              echo "source_ref:  ${SOURCE_REF}"
+              echo "source_sha:  ${source_sha}"
+              echo "synced_at:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            } > .github/AI_CONFIG_VERSION
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "AI config 內容無變化，略過開 PR。"
+          fi
+
       - name: Create pull request
+        if: steps.sync.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ github.token }}

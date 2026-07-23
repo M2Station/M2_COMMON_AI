@@ -46,11 +46,11 @@ jobs:
     timeout-minutes: 10       # 安全網：避免卡住的 job 空耗 runner
     steps:
       - name: Checkout this repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # 公開 repo，無需 token
       - name: Checkout central AI config
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ env.CENTRAL_AI_REPO }}
           ref: ${{ inputs.ref || 'main' }}

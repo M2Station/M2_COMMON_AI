@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     把中央 AI config 的同步機制安裝進一個 repo。
 

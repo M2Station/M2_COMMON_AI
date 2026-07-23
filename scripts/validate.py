@@ -143,10 +143,29 @@ def check_instruction(path: Path) -> None:
         err(path, "frontmatter 缺少 applyTo，否則不會自動套用到任何檔案")
 
 
+def check_powershell(path: Path) -> None:
+    """Windows PowerShell 5.1 在無 BOM 時以系統 ANSI codepage 解析 .ps1。
+    cp950 的 trail byte 範圍含 0x40-0x7E，UTF-8 中文位元組會被錯誤配對，
+    吃掉後續引號或換行，造成敘述被當成字串、變數指派被跳過。"""
+    raw = path.read_bytes()
+    if not raw.startswith(b"\xef\xbb\xbf"):
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            err(path, "非 UTF-8 編碼")
+            return
+        if any(ord(c) > 0x2E7F for c in text):
+            err(path, "含非 ASCII 字元但缺少 UTF-8 BOM —— "
+                      "Windows PowerShell 5.1 會以 cp950 解析而導致亂碼與語法錯誤")
+
+
 def main() -> int:
     for f in REQUIRED_FILES:
         if not f.exists():
             errors.append(f"缺少必要檔案：{f.relative_to(ROOT)}")
+
+    for p in sorted((ROOT / "scripts").glob("*.ps1")):
+        check_powershell(p)
 
     if not PROMPT_DIR.is_dir():
         errors.append(f"缺少目錄：{PROMPT_DIR.relative_to(ROOT)}")

@@ -15,7 +15,9 @@ name: Sync AI Config
 
 on:
   schedule:
-    - cron: '0 1 * * 1'        # 每週一 09:00 (UTC+8)
+    # 台灣時間 (UTC+8) 每天 05:00 與 17:00 各檢查一次；GitHub cron 以 UTC 計算，
+    # 換算：05:00 UTC+8 = 21:00 UTC（前一日）、17:00 UTC+8 = 09:00 UTC。
+    - cron: '0 9,21 * * *'
   workflow_dispatch:
     inputs:
       ref:
@@ -26,6 +28,13 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write             # 「Open issue on failure」步驟建立 issue 時需要
+
+# 同一時間只允許一個同步在跑，避免排程與手動觸發並發操作 chore/sync-ai-config 分支而衝突。
+# cancel-in-progress: false — 讓進行中的同步跑完，不中途取消留下半完成狀態。
+concurrency:
+  group: sync-ai-config
+  cancel-in-progress: false
 
 env:
   # 可用 repo/org variable CENTRAL_AI_REPO 覆寫，未設定時使用預設值
@@ -34,6 +43,7 @@ env:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 10       # 安全網：避免卡住的 job 空耗 runner
     steps:
       - name: Checkout this repo
         uses: actions/checkout@v4
@@ -47,6 +57,9 @@ jobs:
           path: .central
 
       - name: Sync files
+        env:
+          # 透過環境變數傳入使用者可控的 ref，避免 ${{ }} 直接內插進 shell 造成 script injection
+          SOURCE_REF: ${{ inputs.ref || 'main' }}
         run: |
           set -euo pipefail
           mkdir -p .github/prompts .github/instructions
@@ -60,7 +73,7 @@ jobs:
           # 記錄來源版本，便於追溯
           {
             echo "source_repo: ${CENTRAL_AI_REPO}"
-            echo "source_ref:  ${{ inputs.ref || 'main' }}"
+            echo "source_ref:  ${SOURCE_REF}"
             echo "source_sha:  $(git -C .central rev-parse HEAD)"
             echo "synced_at:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > .github/AI_CONFIG_VERSION

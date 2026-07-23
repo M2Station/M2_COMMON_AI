@@ -81,11 +81,18 @@ jobs:
             path="$(printf '%s' "$line" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
             [[ -z "$path" || "$path" == '#'* ]] && continue
 
-            # 安全防護：只允許 .github/ 底下；擋絕對路徑、.. 跳脫、與 workflows/
-            # （GITHUB_TOKEN 本就無法寫 workflows/，明確擋下以免製造 rejected push）。
+            # 安全防護：只允許 .github/ 底下的乾淨相對路徑。
+            #   - 擋絕對路徑
+            #   - 擋 . / .. 單獨作為路徑區段：會被檔案系統/rsync 正規化，
+            #     例如 ./workflows/ 會落到 .github/workflows/，繞過下方 workflows/ 守衛
+            #   - 擋 workflows/（GITHUB_TOKEN 無法寫 .github/workflows/）
             case "$path" in
-              /* | *..*)                 echo "::error::manifest 路徑不合法：$path"; exit 1 ;;
-              workflows/ | workflows/*)  echo "::error::manifest 不允許同步 workflows/：$path"; exit 1 ;;
+              /*)
+                echo "::error::manifest 不允許絕對路徑：$path"; exit 1 ;;
+              . | .. | ./* | ../* | */./* | */../* | */. | */..)
+                echo "::error::manifest 路徑不得含 . 或 .. 區段：$path"; exit 1 ;;
+              workflows | workflows/ | workflows/*)
+                echo "::error::manifest 不允許同步 workflows/：$path"; exit 1 ;;
             esac
 
             src=".central/.github/$path"

@@ -176,10 +176,11 @@ def check_manifest() -> None:
         if not line or line.startswith("#"):
             continue
         valid += 1
-        if line.startswith("/") or ".." in line:
-            err(MANIFEST, f"路徑不合法（不得為絕對路徑或含 ..）：{line!r}")
+        segments = line.rstrip("/").split("/")
+        if line.startswith("/") or "." in segments or ".." in segments:
+            err(MANIFEST, f"路徑不合法（不得為絕對路徑或含 . / .. 區段）：{line!r}")
             continue
-        if line == "workflows/" or line.startswith("workflows/"):
+        if segments and segments[0] == "workflows":
             err(MANIFEST, f"不允許同步 workflows/（GITHUB_TOKEN 無法寫入）：{line!r}")
             continue
         target = GH / line

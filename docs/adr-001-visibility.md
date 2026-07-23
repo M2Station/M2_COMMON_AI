@@ -1,6 +1,6 @@
 # ADR-001：中央 repo 的 visibility 決策
 
-**狀態**：✅ 已決定 —— **Private + GitHub App**
+**狀態**：✅ 已決定 —— **Public**（2026-07-23 修訂，取代先前的 Private + GitHub App）
 **日期**：<填入>
 **決策者**：<填入>
 **放置路徑**：`docs/adr-001-visibility.md`
@@ -188,6 +188,58 @@ App 只需要 **Repository permissions → Contents: Read-only**，且只安裝�
 即使選 Private，也**維持「內容假設會被公開」的紀律**——
 `copilot-instructions.md` 不放專案資訊的設計繼續沿用。這讓日後真的要公開時，
 只是一次 visibility 切換，不是一場歷史清洗。
+
+---
+
+## 決議修訂：改採 Public（2026-07-23）
+
+先前決議為 Private + GitHub App，其成立前提是
+**「GitHub App 可在 org 層級設定一次、所有 repo 繼承」**。該前提在查證後不成立：
+
+```
+gh api orgs/<ORG> -q .plan.name  →  free
+```
+
+**GitHub Free 的 org 層級 secret 與 variable 無法被 private repo 讀取**
+（官方文件：Using secrets in GitHub Actions）。因此 private 方案的實際成本變成
+**逐 repo 設定三項憑證**，且日後輪替私鑰須逐 repo 更新。
+
+取得公司核可可公開後，改採 Public。理由：
+
+| 項目 | Private（Free 方案） | Public |
+|---|---|---|
+| GitHub App | 需建立、產生私鑰、安裝 | 不需要 |
+| 消費端設定 | 逐 repo 三項（variable ×2、secret ×1） | 無 |
+| `.pem` 保管 | 每接新專案都要用到 | 不存在 |
+| workflow 步驟數 | 7 | 5 |
+| 方案升級壓力 | 專案變多時需升 Team | 無 |
+
+內容本身不含機密（`copilot-instructions.md` 採自我探查設計、§6 明訂不放客戶資訊），
+因此公開的唯一實質成本是**不可逆性**，已由公司核可承擔。
+
+> **重要區別**：公開的只有中央 repo 這一個。
+> 各專案 repo 維持 private —— private repo 的 workflow 讀取 public repo
+> 不需要任何認證。
+
+### 隨此決議一併移除
+
+- GitHub App `m2-ai-config-sync`（可反安裝並刪除）
+- org / repo 層級的 `AI_CONFIG_APP_CLIENT_ID`、`AI_CONFIG_APP_KEY`
+- 本機的 `.pem` 私鑰檔
+- workflow 的 `Resolve central repo name`、`Mint GitHub App token` 兩個步驟
+
+### 隨此決議新增的紀律
+
+- repo 開啟 secret scanning + push protection（公開 repo 免費）
+- `main` 設 branch protection，外部 PR 不得直接合併
+- `.gitignore` 保留 `*.pem`、`*.key`、`.env` 阻擋
+- 任何 commit 前自問：這行內容可以被全世界看到嗎？
+
+### 何時該重新評估
+
+- 公司政策改變、要求收回公開 → 改 private 時**必須同時**處理認證
+  （Free 方案下即逐 repo 設定，或升級 Team）。
+  注意：已存在的 fork 不會隨之變 private。
 
 ---
 

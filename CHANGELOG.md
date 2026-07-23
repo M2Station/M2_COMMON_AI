@@ -27,8 +27,9 @@
 - `.github/prompts/m2_release.prompt.md` — `/m2_release`，
   版本 bump → PR → merge → tag → CI publish。
   版號規則：patch 逐一遞增，滿 9 進位到 minor。
-- `templates/sync-ai-config.yml` — 下游 repo 的同步 workflow，
-  使用 GitHub App token 認證，排程失敗時自動開 issue。
+- `templates/sync-ai-config.yml` — 下游 repo 的同步 workflow。
+  中央 repo 為 public，故不需任何 token / secret / variable；
+  排程失敗時自動開 issue。
 - `scripts/validate.py` — 設定檔結構與 frontmatter 驗證。
 - `scripts/bootstrap-repo.ps1` — 一鍵將同步機制安裝進指定 repo。
 - `scripts/pull-latest.ps1` — 更新本地 clone（VS Code 路徑方案用）。
@@ -36,5 +37,6 @@
 
 ### 決策
 
-- 中央 repo 採 **private**，跨 repo 認證使用 **GitHub App**（非 PAT），
-  理由見 `docs/adr-001-visibility.md`。
+- 中央 repo 採 **public**，消費端零設定認證。
+  各專案 repo 維持 private，不受影響。
+  決策脈絡與被推翻的 private + GitHub App 方案見 `docs/adr-001-visibility.md`。

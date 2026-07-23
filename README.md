@@ -129,126 +129,70 @@ M2_AI_CONFIG/
 檔案實際落在各 repo 的 `.github/`，所以 GitHub.com 上的 Copilot code review、
 cloud agent、以及其他人 clone 下來都有效 —— 這是方案 A / B 做不到的。
 
-#### 設定項放在哪：全部在「消費端」，不在中央 repo
+#### 需要的設定：幾乎沒有
 
-這是最容易搞錯的一點。下列三項設定都是給 `sync-ai-config.yml` 用的，
-而那支 workflow 跑在**各個專案**裡 —— **中央 repo 一項都不需要設定**
-（它只跑 `validate.yml`，不需要任何 variable 或 secret）。
+中央 repo 為 **public**，因此消費端**不需要 token、secret 或 variable**。
+唯一要開的權限是讓 Actions 能建立 PR：
 
-| 設定項 | 用途 | 設定位置 | 中央 repo 需要嗎 |
-|---|---|---|---|
-| `CENTRAL_AI_REPO`（variable） | 告訴 workflow 去哪抓設定 | 消費端 repo **或 org 層級** | ❌ 不需要 |
-| `AI_CONFIG_TOKEN`（secret） | 中央 repo 為 private 時的讀取權限 | 消費端 repo **或 org 層級** | ❌ 不需要 |
-| Allow Actions to create PR | 讓 workflow 能開同步 PR | 消費端 repo **或 org 層級** | ❌ 不需要 |
-
-#### 建議：設在 org 層級，只設一次
-
-專案數量多時**不要逐個 repo 設定**。三項都可在組織層級設定並被所有 repo 繼承，
-新專案接進來時完全不必再設定。
-
-```powershell
-# 1. 組織層級變數
-gh variable set CENTRAL_AI_REPO --org M2Station --visibility all --body "M2Station/M2_AI_CONFIG"
-
-# 2. 組織層級 secret（中央 repo 為 private 時才需要）
-gh secret set AI_CONFIG_TOKEN --org M2Station --visibility all --body "<PAT>"
-
-# 3. 此項僅能於網頁設定
-#    https://github.com/organizations/M2Station/settings/actions
-#    → Workflow permissions
-#    → 勾選 Allow GitHub Actions to create and approve pull requests
+```text
+Settings → Actions → General → Workflow permissions
+→ 勾選 Allow GitHub Actions to create and approve pull requests
 ```
 
-網頁操作路徑：`Organization Settings → Secrets and variables → Actions`
-→ `Variables` / `Secrets` 分頁 → `New organization variable / secret`
-→ `Repository access` 選 `All repositories`。
+org 層級開一次即可（`https://github.com/organizations/<ORG>/settings/actions`），
+或在各 repo 個別開啟。
 
-不想全開時改用 `--visibility selected --repos repo-a,repo-b`。
+> **消費端 repo 可以是 private，不受影響。**
+> 讀取「公開的」中央 repo 不需要任何認證 —— 公開的只有這一個放通用規範的 repo，
+> 你的專案照樣是 private。
 
-> ⚠️ **優先順序：repo 層級會覆蓋 org 層級。**
-> 若某 repo 曾設過 repo 層級的 `CENTRAL_AI_REPO`，之後改 org 層級對它無效。
-> 清除：`gh variable delete CENTRAL_AI_REPO --repo <owner>/<name>`
+中央 repo 位置寫在 workflow 的 `env` 預設值裡，可用 `CENTRAL_AI_REPO`
+variable 覆寫（例如測試用的 fork）：
+
+```yaml
+env:
+  CENTRAL_AI_REPO: ${{ vars.CENTRAL_AI_REPO || 'M2Station/M2_AI_CONFIG' }}
+```
 
 #### 接入新 repo
 
-org 層級已設定的情況下，每個專案只需要放入 workflow：
-
 ```powershell
-# 方式一：用腳本（會自動抓範本、開 PR）
-Z:\M2_AI_CONFIG\scripts\bootstrap-repo.ps1 -CentralRepo M2Station/M2_AI_CONFIG
+# 方式一：用腳本（自動抓範本、開 PR）
+<local-clone>\M2_AI_CONFIG\scripts\bootstrap-repo.ps1
 
-# 方式二：手動（中央 repo 為 private，不能用 curl 匿名抓，需經 gh api）
+# 方式二：手動
 mkdir -Force .github\workflows
-gh api repos/M2Station/M2_AI_CONFIG/contents/templates/sync-ai-config.yml `
-  -H "Accept: application/vnd.github.raw" > .github\workflows\sync-ai-config.yml
+curl -o .github\workflows\sync-ai-config.yml `
+  https://raw.githubusercontent.com/M2Station/M2_AI_CONFIG/main/templates/sync-ai-config.yml
 git add . && git commit -m "chore(ai): add central config sync" && git push
 
 # 立即跑一次，不等排程
 gh workflow run sync-ai-config.yml
 ```
 
-> 若**未**採用 org 層級設定，才需要在每個 repo 補上：
-> `gh variable set CENTRAL_AI_REPO --body "M2Station/M2_AI_CONFIG"`
-> 以及（private 時）`gh secret set AI_CONFIG_TOKEN --body "<PAT>"`。
-
 之後每週一自動開一個同步 PR。每次同步會寫入 `.github/AI_CONFIG_VERSION`，
 記錄來源 repo、ref、SHA 與時間，方便追溯是哪一版同步進來的。
 
-#### 認證方式：GitHub App（本 repo 為 private）
+**同步範圍**（其餘路徑一律不動）：
 
-中央 repo 為 private，因此消費端的 `github.token` 無法讀取它
-（`github.token` 只作用於當前 repo，無法跨 repo、跨 visibility 邊界）。
+- `.github/copilot-instructions.md`（覆蓋）
+- `.github/prompts/**`（`--delete`，中央移除的檔案會一併移除）
+- `.github/instructions/**`（`--delete`）
 
-採用 **GitHub App** 而非 PAT，原因是 PAT 有到期日，而**到期時所有 repo 的同步會同時
-失效且無人察覺**（排程任務紅燈通常沒人在看）。App 的私鑰不會過期，每次執行換發
-1 小時期效的 installation token。
+> ⚠️ 因為用了 `--delete`，**專案專屬的 instructions 不要放在** `.github/instructions/`。
+> 放 `.github/<project>-instructions/` 或在 workflow 的 rsync 加 `--exclude`。
 
-**org 層級只需設定三項，之後接任何專案都不必再設：**
+#### 公開 repo 的維護紀律
 
-| 類型 | 名稱 | 內容 |
-|---|---|---|
-| Variable | `CENTRAL_AI_REPO` | `M2Station/M2_AI_CONFIG` |
-| Variable | `AI_CONFIG_APP_CLIENT_ID` | GitHub App 的 Client ID |
-| Secret | `AI_CONFIG_APP_KEY` | App 私鑰 `.pem` 全文 |
+本 repo 公開，因此：
 
-App 權限只需 **Repository permissions → Contents: Read-only**，
-且只安裝到 `M2_AI_CONFIG` 這一個 repo —— 權限範圍比 PAT 小得多。
+- **不得放入**任何客戶名稱、專案代號、料號、成本、內部 IP、憑證、內部路徑。
+  `scripts/validate.py` 會偵測常見憑證樣式，但**它不是最後防線，人是**。
+- 建議在 repo 開啟 **secret scanning** 與 **push protection**（公開 repo 免費）。
+- 設定 **branch protection**，避免外部 PR 直接進 `main`。
+- 記住 git 歷史是永久的：誤 commit 後即使刪除，內容仍留在歷史與可能的 fork 中。
 
-同步 workflow 另外加了 `if: failure()` 步驟，排程失敗時會自動開 issue，
-避免靜默失效。
-
-> 完整的 public / private 利弊分析、其他認證方案對照、以及日後若要改為公開的
-> 檢查清單，見 [`docs/adr-001-visibility.md`](docs/adr-001-visibility.md)。
-
-#### 本組織的實際設定（已完成）
-
-| 項目 | 值 |
-|---|---|
-| 中央 repo | `M2Station/M2_AI_CONFIG`（private） |
-| GitHub App | `m2-ai-config-sync`，權限 Contents: Read-only，僅安裝於 `M2_AI_CONFIG` |
-| Org variable | `CENTRAL_AI_REPO` = `M2Station/M2_AI_CONFIG` |
-| Org variable | `AI_CONFIG_APP_CLIENT_ID` = `Iv23li…`（完整值見 App 設定頁） |
-| Org secret | `AI_CONFIG_APP_KEY` = App 私鑰 `.pem` 全文 |
-| Actions 權限 | [org settings](https://github.com/organizations/M2Station/settings/actions) → 已允許 Actions 建立 PR |
-
-重建或輪替時使用的指令：
-
-```powershell
-gh variable set AI_CONFIG_APP_CLIENT_ID --org M2Station --visibility all --body "<CLIENT_ID>"
-
-gh secret set AI_CONFIG_APP_KEY --org M2Station --visibility all `
-  --body (Get-Content "Z:\m2-ai-config-sync.<date>.private-key.pem" -Raw)
-
-gh variable set CENTRAL_AI_REPO --org M2Station --visibility all --body "M2Station/M2_AI_CONFIG"
-```
-
-> **私鑰檔請勿長期留在共用磁碟（如 `Z:\`）。**
-> 設定完成後即可刪除 —— GitHub 端只保留公鑰，私鑰僅存於 org secret。
-> 遺失時不需要救援，直接在 App 頁面重新產生一把再更新 secret 即可。
-
-> **App token 的授權範圍由 `CENTRAL_AI_REPO` 推導**（workflow 的 `Resolve central
-> repo name` 步驟），因此中央 repo 若更名，只需改這一個 org variable，
-> 不必逐一修改各專案的 workflow。
+決策脈絡見 [`docs/adr-001-visibility.md`](docs/adr-001-visibility.md)。
 
 ### 方案 A：VS Code User Profile（個人日常，零設定）
 
@@ -268,7 +212,7 @@ gh variable set CENTRAL_AI_REPO --org M2Station --visibility all --body "M2Stati
 {
   "chat.promptFilesLocations": {
     ".github/prompts": true,
-    "Z:/M2_AI_CONFIG/.github/prompts": true
+    "C:/dev/M2_AI_CONFIG/.github/prompts": true
   }
 }
 ```

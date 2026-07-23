@@ -3,8 +3,10 @@
     把中央 AI config 的同步機制安裝進一個 repo。
 
 .DESCRIPTION
-    在目標 repo 中建立 .github/workflows/sync-ai-config.yml、設定 CENTRAL_AI_REPO 變數，
-    並開一個 PR。預設不直接推 main，走 PR 流程。
+    在目標 repo 建立 .github/workflows/sync-ai-config.yml 並開一個 PR。
+
+    中央 repo 為 public，因此不需要任何 token、secret 或 variable ——
+    本腳本只負責放檔案與開 PR。
 
     放置路徑：scripts/bootstrap-repo.ps1
 
@@ -12,30 +14,25 @@
     目標 repo 的本地路徑。預設為當前目錄。
 
 .PARAMETER CentralRepo
-    中央 repo，格式 owner/name。
-
-.PARAMETER SetRepoVars
-    在此 repo 設定 repo 層級的 CENTRAL_AI_REPO 變數。
-    預設不設定 —— 認證與變數應在 org 層級統一管理（見中央 repo 的 ADR-001）。
+    中央 repo，格式 owner/name。預設 M2Station/M2_AI_CONFIG。
 
 .PARAMETER RunNow
-    安裝後立即觸發一次同步（需 workflow 已在預設分支上，故通常配合 -NoPr 使用）。
+    安裝後立即觸發一次同步（需搭配 -NoPr，workflow 必須先存在於預設分支）。
 
 .PARAMETER NoPr
     直接 commit 到當前分支，不開 PR。
 
 .EXAMPLE
-    .\bootstrap-repo.ps1 -Path C:\dev\my-project -CentralRepo M2Station/M2_AI_CONFIG
+    .\bootstrap-repo.ps1
 
 .EXAMPLE
-    .\bootstrap-repo.ps1 -CentralRepo M2Station/M2_AI_CONFIG -NoPr -RunNow
+    .\bootstrap-repo.ps1 -Path C:\dev\my-project -NoPr -RunNow
 #>
 
 [CmdletBinding()]
 param(
     [string]$Path = (Get-Location).Path,
-    [Parameter(Mandatory)][ValidatePattern('^[\w.-]+/[\w.-]+$')][string]$CentralRepo,
-    [switch]$SetRepoVars,
+    [ValidatePattern('^[\w.-]+/[\w.-]+$')][string]$CentralRepo = 'M2Station/M2_AI_CONFIG',
     [switch]$RunNow,
     [switch]$NoPr
 )
@@ -87,17 +84,17 @@ try {
     # ---------- 取得 workflow 範本 ----------
     Write-Step '取得同步 workflow 範本'
 
-    # 中央 repo 為 private，改用 gh api 取檔（沿用你已登入的 gh 憑證，不需另外準備 token）
+    $rawUrl = "https://raw.githubusercontent.com/$CentralRepo/main/templates/sync-ai-config.yml"
     $tmp = New-TemporaryFile
-    $apiPath = "repos/$CentralRepo/contents/templates/sync-ai-config.yml"
-    gh api $apiPath -H "Accept: application/vnd.github.raw" > $tmp 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        Fail "無法從 $CentralRepo 取得範本。請確認：(1) repo 名稱正確 (2) 你的帳號對該 repo 有讀取權限"
+    try {
+        Invoke-WebRequest -Uri $rawUrl -OutFile $tmp -UseBasicParsing
+        Write-Ok "已下載：$rawUrl"
     }
-    Write-Ok "已取得範本：$CentralRepo/templates/sync-ai-config.yml"
+    catch {
+        Fail "下載失敗（$rawUrl）。請確認中央 repo 為 public 且路徑正確。原始錯誤：$($_.Exception.Message)"
+    }
 
-    $content = Get-Content $tmp -Raw
-    if ($content -notmatch 'CENTRAL_AI_REPO') {
+    if ((Get-Content $tmp -Raw) -notmatch 'Sync AI Config') {
         Fail '下載到的範本內容不正確，請確認中央 repo 的 templates/sync-ai-config.yml'
     }
 
@@ -116,22 +113,11 @@ try {
     Remove-Item $tmp -Force
     Write-Ok $WorkflowPath
 
-    # ---------- 設定 variable / secret ----------
-    Write-Step '設定 repository variable / secret'
-
-    # 已在 org 層級設好時就不必重複設定（repo 層級會覆蓋 org 層級，反而更難維護）
-    $orgVar = (gh api "orgs/$($targetRepo.Split('/')[0])/actions/variables/CENTRAL_AI_REPO" 2>$null)
-    if ($orgVar) {
-        Write-Ok 'CENTRAL_AI_REPO 已在 org 層級設定，跳過 repo 層級設定'
-    }
-    elseif ($SetRepoVars) {
+    # 中央 repo 非預設值時才需要設變數
+    if ($CentralRepo -ne 'M2Station/M2_AI_CONFIG') {
         gh variable set CENTRAL_AI_REPO --body $CentralRepo 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { Fail '設定 CENTRAL_AI_REPO 失敗，請確認你對該 repo 有 admin 權限' }
-        Write-Ok "CENTRAL_AI_REPO = $CentralRepo（repo 層級）"
-    }
-    else {
-        Write-Warn 'org 層級未設定 CENTRAL_AI_REPO。請設定 org 變數，或加 -SetRepoVars 只設定這個 repo'
-        Write-Warn '  gh variable set CENTRAL_AI_REPO --org <ORG> --visibility all --body "' + $CentralRepo + '"'
+        if ($LASTEXITCODE -eq 0) { Write-Ok "CENTRAL_AI_REPO = $CentralRepo" }
+        else { Write-Warn '設定 CENTRAL_AI_REPO 失敗，請確認你對該 repo 有 admin 權限' }
     }
 
     # ---------- commit / push ----------
@@ -150,19 +136,20 @@ try {
         git push -u origin $BranchName
         if ($LASTEXITCODE -ne 0) { Fail 'push 失敗' }
 
-        $prUrl = gh pr create --base $originalBranch --title 'chore(ai): add central Copilot config sync' --body @"
+        $body = @"
 由 ``bootstrap-repo.ps1`` 產生。
 
 ## What
 加入 ``$WorkflowPath``，從中央 repo ``$CentralRepo`` 同步 Copilot 設定。
 
 ## Why
-集中維護通用規範與 prompt files（``/review``、``/pr``、``/release``），避免各 repo 分歧。
+集中維護通用規範與 prompt files（``/m2_review``、``/m2_pr``、``/m2_release``），避免各 repo 分歧。
 
 ## 合併後還需要做
-- [ ] Settings → Actions → General → 勾選「Allow GitHub Actions to create and approve pull requests」
+- [ ] Settings -> Actions -> General -> 勾選「Allow GitHub Actions to create and approve pull requests」
 - [ ] 手動觸發一次：``gh workflow run sync-ai-config.yml``
 "@
+        $prUrl = gh pr create --base $originalBranch --title 'chore(ai): add central Copilot config sync' --body $body
         Write-Ok "PR 已建立：$prUrl"
     }
 
@@ -173,7 +160,7 @@ try {
       1. Settings -> Actions -> General
          勾選「Allow GitHub Actions to create and approve pull requests」
       2. 合併後手動跑一次：gh workflow run sync-ai-config.yml
-      3. 同步 PR 合併後即可使用 /review、/pr、/release
+      3. 同步 PR 合併後即可使用 /m2_review、/m2_pr、/m2_release
 "@ -ForegroundColor Gray
 
     if ($RunNow) {

@@ -27,6 +27,12 @@
 - `.github/sync-manifest.txt` — 同步清單（single source of truth）。
 - `scripts/validate.py` 新增 manifest 驗證（路徑合法性與存在性）。
 
+### 修正
+
+- manifest 路徑守衛改為**區段比對**：擋掉 `./workflows/` 這類經正規化後可繞過
+  `workflows/` 阻擋的路徑（workflow 與 `validate.py` 一致）；同時不再誤擋含 `..`
+  的合法檔名（如 `a..b.md`）。
+
 ---
 
 ## v1.0.0 — 2026-07-23

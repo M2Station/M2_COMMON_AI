@@ -1,7 +1,7 @@
 # ADR-001：中央 repo 的 visibility 決策
 
 **狀態**：✅ 已決定 —— **Public**（2026-07-23 修訂，取代先前的 Private + GitHub App）
-**日期**：<填入>
+**日期**：2026-07-23
 **決策者**：<填入>
 **放置路徑**：`docs/adr-001-visibility.md`
 
@@ -126,7 +126,7 @@
           repositories: ${{ steps.central.outputs.name }}
 
       - name: Checkout central AI config
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ vars.CENTRAL_AI_REPO }}
           token: ${{ steps.app-token.outputs.token }}
@@ -173,11 +173,11 @@ App 只需要 **Repository permissions → Contents: Read-only**，且只安裝�
 
 ---
 
-## 決議
+## 初步決議（已於 2026-07-23 被推翻，保留作歷史紀錄）
 
-**採用 Private + GitHub App。**
+> ⚠️ 以下為初步決議，已被推翻。**最終決議見下一節〈最終決議：採用 Public〉。**
 
-理由：
+**初步採用 Private + GitHub App。** 理由：
 
 1. 這個 repo 的價值完全來自組織內部使用，公開帶來的技術好處（省掉 token）
    遠小於政策風險與不可逆性。
@@ -191,7 +191,7 @@ App 只需要 **Repository permissions → Contents: Read-only**，且只安裝�
 
 ---
 
-## 決議修訂：改採 Public（2026-07-23）
+## 最終決議：採用 Public（2026-07-23）
 
 先前決議為 Private + GitHub App，其成立前提是
 **「GitHub App 可在 org 層級設定一次、所有 repo 繼承」**。該前提在查證後不成立：
@@ -245,6 +245,8 @@ gh api orgs/<ORG> -q .plan.name  →  free
 
 ## 待確認事項
 
-- [ ] org 是否由 enterprise 帳號擁有（決定 Internal 是否可選）
-- [ ] 公司對公開 GitHub 的政策是什麼，核可流程為何
-- [ ] 誰有權限建立並安裝 GitHub App 到 org
+已隨最終決議解決，保留作紀錄：
+
+- 公司對公開 GitHub 的政策、核可流程 → **已取得核可**，故採 Public。
+- org 是否為 enterprise 帳號、誰可安裝 GitHub App → 因不再採 Private/Internal，
+  已不適用。

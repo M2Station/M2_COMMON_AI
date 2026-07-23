@@ -98,7 +98,11 @@ jobs:
         if: steps.sync.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ github.token }}
+          # 省略 token → 沿用 action 預設的 GITHUB_TOKEN，只用來「在本 repo 建立 PR」
+          # （權限由上方 permissions 控制），與讀取公開中央 repo 無關（上方 Checkout 那步不帶 token）。
+          # caveat：GITHUB_TOKEN 開的 PR 不會觸發 consumer 端 on: pull_request 檢查（GitHub 防遞迴）；
+          #         若該 check 被設為 required，此 PR 會卡住 —— 需要時改用 PAT / GitHub App token
+          #         （peter-evans FAQ；可複用 docs/adr-001-visibility.md 的 App token snippet）。
           branch: chore/sync-ai-config
           delete-branch: true
           commit-message: 'chore(ai): sync Copilot config from central repo'

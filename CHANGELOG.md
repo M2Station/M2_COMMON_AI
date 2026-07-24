@@ -27,6 +27,19 @@
 
 ---
 
+## v1.1.2 — 2026-07-24
+
+### 變更
+
+- `templates/sync-m2-common-ai.yml` 自動 PR 內文改為中英雙語（English 在前、中文在後），
+  並修正 workflow 名稱指稱（檔名 `sync-m2-common-ai` → 顯示名 `Sync M2 Common AI`）、
+  PR 標題加上 `[M2]` 前綴。純文案調整，同步行為不變；
+  既有下游 repo 需重跑一次 bootstrap 才會套用（同步不碰 `.github/workflows/`）。
+- 同步失敗通知 issue 改為中英雙語，並加上權限檢查提示
+  （最常見失敗原因：Actions 未被允許建立 PR，導致無法開同步 PR）。
+
+---
+
 ## v1.1.1 — 2026-07-24
 
 ### 變更

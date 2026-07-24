@@ -2,7 +2,7 @@ name: Sync M2 Common AI
 
 # 從中央 repo 同步 Copilot 設定到本 repo。放置路徑：.github/workflows/sync-m2-common-ai.yml
 #
-# 這是一支「薄 stub」：真正的同步邏輯全部放在中央的 reusable workflow，
+# 這是一支「stub」：真正的同步邏輯全部放在中央的 reusable workflow，
 # 本檔只負責「何時觸發」與「給什麼權限」，之後幾乎不用再改。
 #   → 升 action 版本、改同步邏輯、改 assignee，都只改中央那支，下游下次排程自動生效。
 #   → 中央 reusable：.github/workflows/sync-m2-common-ai-reusable.yml

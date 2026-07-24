@@ -3,7 +3,7 @@ name: Sync M2 Common AI (reusable)
 # 中央 reusable workflow：同步邏輯的 single source of truth。
 # 放置路徑：.github/workflows/sync-m2-common-ai-reusable.yml
 #
-# 下游 repo 不複製這支，而是用一支「薄 stub」以 uses: 呼叫它：
+# 下游 repo 不複製這支，而是用一支「stub」以 uses: 呼叫它：
 #   jobs.sync.uses: M2Station/M2_COMMON_AI/.github/workflows/sync-m2-common-ai-reusable.yml@main
 #
 # 好處：升 action 版本、改同步邏輯、改 assignee，全部只改這裡一次，

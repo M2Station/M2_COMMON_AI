@@ -47,7 +47,7 @@ jobs:
               import yaml
           except ImportError:
               sys.exit(0)          # PyYAML 不在預設環境時略過，非致命
-          # 下游藄 stub 與中央 reusable workflow 都要能解析（reusable 壞掉會一次弄壞全下游）。
+          # 下游薄 stub 與中央 reusable workflow 都要能解析（reusable 壞掉會一次弄壞全下游）。
           targets = [
               'templates/sync-m2-common-ai.yml',
               '.github/workflows/sync-m2-common-ai-reusable.yml',

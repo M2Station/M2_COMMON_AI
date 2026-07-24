@@ -52,7 +52,7 @@ M2_COMMON_AI/
 │       ├── validate.yml              ← CI：檢查格式，防止推壞
 │       └── sync-m2-common-ai-reusable.yml  ← ★ 同步邏輯本體，下游用 stub 呼叫
 │
-├── templates/sync-m2-common-ai.yml   ← 各專案要放的同步 workflow（藄 stub，呼叫上面的 reusable）
+├── templates/sync-m2-common-ai.yml   ← 各專案要放的同步 workflow（薄 stub，呼叫上面的 reusable）
 ├── scripts/
 │   ├── validate.py                   ← 本地驗證：python scripts/validate.py
 │   └── bootstrap-repo.ps1            ← 一鍵把同步機制裝進某個專案
@@ -71,7 +71,7 @@ M2_COMMON_AI/
 「要同步哪些路徑」由本 repo 的 `.github/sync-manifest.txt` 單一決定。
 之後要加範圍，**只改中央 manifest，下游 workflow 完全不用動**。
 
-> 下游那支 `sync-m2-common-ai.yml` 只是**藄 stub**，用 `uses:` 呼叫中央的
+> 下游那支 `sync-m2-common-ai.yml` 只是**薄 stub**，用 `uses:` 呼叫中央的
 > `.github/workflows/sync-m2-common-ai-reusable.yml`。同步「邏輯」（步驟、action 版本、
 > assignee）都住在中央 reusable，改一次全下游下次排程自動生效；stub 只留觸發時機與權限。
 

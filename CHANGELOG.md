@@ -18,7 +18,7 @@
 
 - **同步 workflow 改為 reusable workflow 架構**：新增中央
   `.github/workflows/sync-m2-common-ai-reusable.yml` 承載全部同步邏輯；
-  `templates/sync-m2-common-ai.yml` 縮成藄 stub，用 `uses:` 呼叫中央 reusable。
+  `templates/sync-m2-common-ai.yml` 縮成薄 stub，用 `uses:` 呼叫中央 reusable。
   - 效果：日後升 action 版本、改同步邏輯、改 assignee 只需改中央 reusable，
     所有下游下次排程自動生效，不用逐一改下游檔案。
   - 下游 stub 只保留觸發時機（schedule / dispatch）、權限與 `uses:` pin，穩定少動。

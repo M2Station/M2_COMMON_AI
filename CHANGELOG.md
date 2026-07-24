@@ -12,6 +12,18 @@
 
 ---
 
+## v1.3.0 — 2026-07-24
+
+### 新增
+
+- `.github/prompts/m2_next.prompt.md` — `/m2_next`，PR 合併後收尾：
+  用 `gh` + GitHub API 雙重查證 PR 已合併 → 回到並更新 `main` → 確認工作區乾淨 →
+  刪除已合併分支 → 備妥下一輪。含按鈕式確認與安全護欄（未合併不刪、只 `-d`、
+  不 `reset --hard`/`clean`、`pull --ff-only`）。
+- `copilot-instructions.md` §9 路由表新增 `/m2_next`，並更新標準流程順序。
+
+---
+
 ## v1.2.0 — 2026-07-24
 
 ### 變更

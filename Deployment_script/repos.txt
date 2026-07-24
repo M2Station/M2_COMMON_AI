@@ -1,0 +1,15 @@
+﻿# repos.txt — 要檢查／更新「.github/workflows/sync-m2-common-ai.yml」的 repo 清單
+#
+# 規則：
+#   - 一行一個 repo，可用 owner/name 或完整 GitHub URL
+#   - # 開頭與空行會被忽略
+#
+# 用法（建議直接雙擊 update-sync-workflow.cmd，用選單操作，免打指令）：
+#   掃描（只回報）： pwsh -File update-sync-workflow.ps1 -RepoFile repos.txt
+#   更新（開 PR）：  pwsh -File update-sync-workflow.ps1 -RepoFile repos.txt -Apply
+
+https://github.com/M2Station/M2_GIT_DIFF
+https://github.com/M2Station/M2_APEX
+https://github.com/M2Station/M2_SCOUT
+https://github.com/M2Station/M2_PROMPT
+https://github.com/M2Station/M2_LOG

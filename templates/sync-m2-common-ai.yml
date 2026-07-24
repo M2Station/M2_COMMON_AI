@@ -139,7 +139,7 @@ jobs:
 
       - name: Create pull request
         if: steps.sync.outputs.changed == 'true'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           # 省略 token → 沿用 action 預設的 GITHUB_TOKEN，只用來「在本 repo 建立 PR」
           # （權限由上方 permissions 控制），與讀取公開中央 repo 無關（上方 Checkout 那步不帶 token）。
@@ -193,11 +193,15 @@ jobs:
           labels: |
             chore
             automated
+          # 指派給維護者，讓這個自動 PR 進入其待辦清單。
+          # 注意：assignee 必須是下游 repo 的協作者，否則 GitHub 會靜默忽略指派（不會使 job 失敗）。
+          # 可用 repo/org variable SYNC_PR_ASSIGNEES 覆寫，未設定時預設指派給 oahsiao。
+          assignees: ${{ vars.SYNC_PR_ASSIGNEES || 'oahsiao' }}
 
       # 排程失敗通常沒人看 —— 明確開 issue 通知
       - name: Open issue on failure
         if: failure() && github.event_name == 'schedule'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             await github.rest.issues.create({

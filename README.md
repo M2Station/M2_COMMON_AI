@@ -48,9 +48,11 @@ M2_COMMON_AI/
 │   │   ├── m2_pr.prompt.md           ← /m2_pr
 │   │   └── m2_release.prompt.md      ← /m2_release
 │   ├── instructions/                 ← 分領域規範（applyTo glob），目前為空
-│   └── workflows/validate.yml        ← CI：檢查格式，防止推壞
+│   └── workflows/
+│       ├── validate.yml              ← CI：檢查格式，防止推壞
+│       └── sync-m2-common-ai-reusable.yml  ← ★ 同步邏輯本體，下游用 stub 呼叫
 │
-├── templates/sync-m2-common-ai.yml   ← 各專案要放的同步 workflow
+├── templates/sync-m2-common-ai.yml   ← 各專案要放的同步 workflow（stub，呼叫上面的 reusable）
 ├── scripts/
 │   ├── validate.py                   ← 本地驗證：python scripts/validate.py
 │   └── bootstrap-repo.ps1            ← 一鍵把同步機制裝進某個專案
@@ -68,6 +70,10 @@ M2_COMMON_AI/
 **pull 式**：下游 repo 的 `sync-m2-common-ai.yml` 定時（或手動）從本 repo 拉取；
 「要同步哪些路徑」由本 repo 的 `.github/sync-manifest.txt` 單一決定。
 之後要加範圍，**只改中央 manifest，下游 workflow 完全不用動**。
+
+> 下游那支 `sync-m2-common-ai.yml` 只是**stub**，用 `uses:` 呼叫中央的
+> `.github/workflows/sync-m2-common-ai-reusable.yml`。同步「邏輯」（步驟、action 版本、
+> assignee）都住在中央 reusable，改一次全下游下次排程自動生效；stub 只留觸發時機與權限。
 
 ### 一次同步的流程
 
@@ -106,9 +112,14 @@ instructions/
 
 ### 既有下游 repo 的一次性遷移
 
-manifest 是 v1.1.0 才加的。**在那之前接入**的 repo 跑的是舊版（路徑寫死）workflow，
-不會自動升級 —— 因為同步不碰 `.github/workflows/`（見安全邊界）。
-讓它換到 manifest 版，重跑一次 bootstrap 覆蓋那支 workflow 即可：
+下游那支 workflow 檔本身**不會自動升級** —— 因為同步不碰 `.github/workflows/`（見安全邊界）。
+所以每次「stub 結構升級」都要**重跑一次 bootstrap** 覆蓋那支 workflow，之後就一勞永逸：
+
+- **manifest 版**（v1.1.0+）：把寫死路徑換成讀中央 manifest。
+- **reusable stub 版**（v1.4.0+）：把整段邏輯換成 `uses:` 呼叫中央 reusable，
+  日後同步邏輯改動（升 action、改 assignee 等）全部自動生效，永遠不用再碰下游。
+
+重跑方式：
 
 ```powershell
 cd <你的專案>
@@ -132,7 +143,8 @@ gh pr create --fill
 |---|---|
 | 改 `copilot-instructions.md`／`prompts`／`instructions` 內容 | 不用，自動同步 |
 | 在 manifest 新增一條路徑 | 不用（前提：已在 manifest 版） |
-| 改 workflow 執行邏輯（加 step 等） | 要，重跑 bootstrap |
+| 改同步「邏輯」（加 step、升 action、改 assignee，改在中央 reusable） | 不用，下次排程自動生效 |
+| 改 stub 本身（觸發時機／權限／換 pin 的 tag） | 要，重跑 bootstrap（前提：已在 reusable stub 版） |
 
 > 為什麼是 pull 不是中央 push：pull 讓消費端零設定、免 token，下游 private 也不受影響。
 > 中央 push 要保管能寫全 org 的 GitHub App key，是安全信任升級 —— 取捨見 `docs/adr-001-visibility.md`。

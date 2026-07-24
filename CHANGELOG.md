@@ -12,6 +12,24 @@
 
 ---
 
+## v1.4.0 — 2026-07-24
+
+### 變更
+
+- **同步 workflow 改為 reusable workflow 架構**：新增中央
+  `.github/workflows/sync-m2-common-ai-reusable.yml` 承載全部同步邏輯；
+  `templates/sync-m2-common-ai.yml` 縮成 stub，用 `uses:` 呼叫中央 reusable。
+  - 效果：日後升 action 版本、改同步邏輯、改 assignee 只需改中央 reusable，
+    所有下游下次排程自動生效，不用逐一改下游檔案。
+  - 下游 stub 只保留觸發時機（schedule / dispatch）、權限與 `uses:` pin，穩定少動。
+  - `bootstrap-repo.ps1` 下載範本時額外要求含 reusable 參照，避免部署到舊版 monolith。
+  - `validate.yml` 一併驗證 reusable workflow 可解析（並加入觸發路徑）。
+- **一次性遷移**：既有下游 repo 需重跑一次 bootstrap 覆蓋那支 workflow 才會換成 stub
+  （同步不碰 `.github/workflows/`，不會自動升級）；換過之後同步邏輯改動即永久自動傳播。
+- 非破壞性：舊版 monolithic workflow 仍可運作，遷移前後不中斷，故列為 minor。
+
+---
+
 ## v1.3.0 — 2026-07-24
 
 ### 新增

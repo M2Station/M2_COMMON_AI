@@ -94,8 +94,9 @@ try {
         Fail "下載失敗（$rawUrl）。請確認中央 repo 為 public 且路徑正確。原始錯誤：$($_.Exception.Message)"
     }
 
-    if ((Get-Content $tmp -Raw) -notmatch 'Sync M2 Common AI') {
-        Fail '下載到的範本內容不正確，請確認中央 repo 的 templates/sync-m2-common-ai.yml'
+    $tmpContent = Get-Content $tmp -Raw
+    if ($tmpContent -notmatch 'Sync M2 Common AI' -or $tmpContent -notmatch 'sync-m2-common-ai-reusable\.yml') {
+        Fail '下載到的範本內容不正確（應為呼叫中央 reusable workflow 的 stub），請確認中央 repo 的 templates/sync-m2-common-ai.yml'
     }
 
     # ---------- 寫入檔案 ----------

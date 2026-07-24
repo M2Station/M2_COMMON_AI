@@ -14,6 +14,7 @@ on:
       - '.github/copilot-instructions.md'
       - '.github/prompts/**'
       - '.github/instructions/**'
+      - '.github/workflows/sync-m2-common-ai-reusable.yml'
       - 'scripts/validate.py'
       - 'templates/**'
   workflow_dispatch:
@@ -38,7 +39,7 @@ jobs:
       - name: Validate config files
         run: python scripts/validate.py
 
-      - name: Validate sync workflow template is parseable
+      - name: Validate sync workflows are parseable
         run: |
           python - <<'PY'
           import sys, pathlib
@@ -46,11 +47,17 @@ jobs:
               import yaml
           except ImportError:
               sys.exit(0)          # PyYAML 不在預設環境時略過，非致命
-          p = pathlib.Path('templates/sync-m2-common-ai.yml')
-          if not p.exists():
-              print(f'FAIL 缺少 {p}'); sys.exit(1)
-          yaml.safe_load(p.read_text(encoding='utf-8'))
-          print(f'OK  {p} 語法正確')
+          # 下游藄 stub 與中央 reusable workflow 都要能解析（reusable 壞掉會一次弄壞全下游）。
+          targets = [
+              'templates/sync-m2-common-ai.yml',
+              '.github/workflows/sync-m2-common-ai-reusable.yml',
+          ]
+          for t in targets:
+              p = pathlib.Path(t)
+              if not p.exists():
+                  print(f'FAIL 缺少 {p}'); sys.exit(1)
+              yaml.safe_load(p.read_text(encoding='utf-8'))
+              print(f'OK  {p} 語法正確')
           PY
 
       - name: Check CHANGELOG updated

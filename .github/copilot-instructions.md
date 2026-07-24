@@ -15,6 +15,7 @@
 - Keep technical terms in their original English (e.g. firmware, schedule, dependency, build); do not force-translate them.
 - Answers should be concise and give the conclusion and runnable code directly; no pleasantries or restating the question.
 - State "not sure" explicitly where uncertain; do not guess APIs, parameter names, or file structure.
+- When the user must **choose or confirm** anything, present the options as a **clickable button list** (an interactive choice prompt), never as free text they must type; typing stays available only as a fallback. This applies to every decision point, confirmations included.
 
 ---
 
@@ -151,7 +152,7 @@ Use Conventional Commits:
 - Reference the project's existing style and naming before editing; prioritize consistency over personal preference.
 - Produced code must be directly runnable; do not leave placeholders like `...` or `// other logic`.
 - For multi-file changes, list the plan before starting.
-- Before large refactors, deleting files, or changing data structures, **ask for confirmation first**.
+- Before large refactors, deleting files, or changing data structures, **ask for confirmation first** — presented as a **clickable button choice** (e.g. **[Proceed] / [Cancel]**), not as text the user must type.
 
 **Do not:**
 

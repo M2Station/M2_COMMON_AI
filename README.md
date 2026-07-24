@@ -16,18 +16,19 @@
 |---|---|---|
 | `/m2_review` | 自我 code review，依 🔴 Blocker／🟡 Should fix／🔵 Nit 分級回報 | 不會（`/m2_review fix` 才會，且逐項確認） |
 | `/m2_pr` | 開 PR → 每 3 秒輪詢 CI → 全過時提醒你確認合併 | 不會 |
+| `/m2_next` | PR 合併後收尾：刪已合併分支、回到並更新 main、確認乾淨、備妥下一輪 | 只清理分支/切 main |
 | `/m2_release` | 算版號 → bump PR → merge → tag → CI 發布 | 只改版本號 |
 
 建議串接使用：
 
 ```text
-寫完 code  →  /m2_review  →  修 Blocker  →  /m2_pr  →  你按 Confirm merge  →  /m2_release
+寫完 code  →  /m2_review  →  修 Blocker  →  /m2_pr  →  你按 Confirm merge  →  /m2_next（收尾）  →（要發版才）/m2_release
 ```
 
 版號規則：patch 逐一遞增，滿 9 進位到 minor。
 `0.3.0 → 0.3.1`、`0.3.9 → 0.4.0`、`0.9.9 → 1.0.0`
 
-三支指令都有「停下來等你確認」的節點。特別注意：**回覆「OK」不算合併授權**，
+四支指令都有「停下來等你確認」的節點。特別注意：**回覆「OK」不算合併授權**，
 必須明確回 `confirm merge` 或自己按 GitHub 上的按鈕。
 
 ---
@@ -35,7 +36,7 @@
 ## 目錄結構
 
 `.github/` 就是 source of truth。中央 repo 自己也吃自己的設定，
-所以在這個 repo 裡開 Copilot Chat 就能直接測試三支指令。
+所以在這個 repo 裡開 Copilot Chat 就能直接測試四支指令。
 
 ```text
 M2_COMMON_AI/

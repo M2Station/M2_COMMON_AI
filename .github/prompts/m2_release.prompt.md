@@ -65,7 +65,7 @@ git push -u origin release/<NEW_VERSION>
 gh pr create --base main --title "<沿用歷史格式>" --body "<摘要 + 變更清單>"
 ```
 
-**監控 CI：沿用 `/m2_pr` 第 5 節的自結束輪詢**，不要用 `gh pr checks --watch`（CI 無輸出時會被終端機判 idle 而假性 timeout，無必需 CI 時會空等）。以 `gh pr view --json state,mergeStateStatus,statusCheckRollup` 輪詢，一有結論即跳出，**一律以背景（async）執行，收到 `RESULT=RUNNING` 必須立即再跑下一批，不可停在 RUNNING**：
+**監控 CI：沿用 `/m2_pr` 第 5 節的自結束輪詢**，不要用 `gh pr checks --watch`（CI 無輸出時會被終端機判 idle 而假性 timeout，無必需 CI 時會空等）。以 `gh pr view --json state,mergeStateStatus,statusCheckRollup` 輪詢，一有結論即跳出，**以有界的同步批次執行、由你自己一批接一批跑到有結論；收到 `RESULT=RUNNING` 必須在同一回合內立即再跑下一批，不可停在 RUNNING，也不可 fire 成背景後結束回合等通知**（否則 CI 稍後完成時沒人輪詢，會「GitHub 已完成、agent 沒反應」）：
 
 - `RESULT=READY`（CI 全過，或無必需 CI 已 mergeable）→ 進入下方確認關卡。
 - `RESULT=FAILED` → **停止發版**，`gh run view <run-id> --log-failed` 讀根因回報；不重試、不繞過、不改 workflow。
@@ -95,7 +95,7 @@ git push origin <TAG>
 
 ## 5. 驗證 publish workflow
 
-`gh run watch` 同樣會在 job 無輸出時被終端機判 idle 而假性 timeout；改用會**自己結束**的輪詢追蹤 tag 觸發的 publish run（一律背景執行，一完成即通知你；收到 `RESULT=RUNNING` 必須再跑下一批）：
+`gh run watch` 同樣會在 job 無輸出時被終端機判 idle 而假性 timeout；改用會**自己結束**的輪詢追蹤 tag 觸發的 publish run（**以有界的同步批次執行、由你自己驅動；收到 `RESULT=RUNNING` 必須在同一回合內再跑下一批，不可 fire 成背景後結束回合等通知**）：
 
 PowerShell：
 

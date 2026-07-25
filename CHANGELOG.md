@@ -12,6 +12,18 @@
 
 ---
 
+## v1.6.0 — 2026-07-25
+
+### 新增
+
+- **需要使用者輸入／選擇／確認時發出提示音**：agent 交還控制、停下等待前，先用終端機發一聲
+  短 beep（PowerShell `[console]::beep(880,200); [console]::beep(1320,300)`；bash/zsh `printf '\a'`），
+  讓使用者不用盯著畫面也會注意到。屬 best-effort（視系統音效）；使用者可另外啟用 VS Code
+  Accessibility Signals（設定 `accessibility.signals.*`，指令 **Help: List Signal Sounds**）取得穩定原生提示音。
+  - `copilot-instructions.md` §1 新增此互動規則。
+
+---
+
 ## v1.5.0 — 2026-07-25
 
 ### 變更

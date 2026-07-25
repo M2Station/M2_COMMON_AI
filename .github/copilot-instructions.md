@@ -15,7 +15,7 @@
 - Keep technical terms in their original English (e.g. firmware, schedule, dependency, build); do not force-translate them.
 - Answers should be concise and give the conclusion and runnable code directly; no pleasantries or restating the question.
 - State "not sure" explicitly where uncertain; do not guess APIs, parameter names, or file structure.
-- When the user must **choose or confirm** anything, present the options as a **clickable button list** (an interactive choice prompt), never as free text they must type; typing stays available only as a fallback. This applies to every decision point, confirmations included.
+- When the user must **choose or confirm** anything, render the options as a **real interactive choice list (actual clickable buttons)** using the client's built-in question/choice prompt mechanism — do **not** merely print `[Option]` brackets as text in a normal reply, which renders as plain text and forces the user to type. Always **mark exactly one option as the recommended default** (append `（最建議）` to its label, or set the prompt's "recommended" flag). Free typing stays available only as a fallback. This applies to every decision point, confirmations included.
 
 ---
 
@@ -152,7 +152,7 @@ Use Conventional Commits:
 - Reference the project's existing style and naming before editing; prioritize consistency over personal preference.
 - Produced code must be directly runnable; do not leave placeholders like `...` or `// other logic`.
 - For multi-file changes, list the plan before starting.
-- Before large refactors, deleting files, or changing data structures, **ask for confirmation first** — presented as a **clickable button choice** (e.g. **[Proceed] / [Cancel]**), not as text the user must type.
+- Before large refactors, deleting files, or changing data structures, **ask for confirmation first** — via the **interactive choice prompt with real buttons** defined in Section 1 (one option marked `（最建議）`), e.g. **[Proceed]（最建議） / [Cancel]**, not as text the user must type.
 
 **Do not:**
 

@@ -130,7 +130,7 @@ $run = @($c | Where-Object { $_.status -in 'QUEUED','IN_PROGRESS','PENDING' -or 
 
 ### 5.2 輪詢批次（會自己結束：有結論即停，否則到心跳窗上限就回報一次）
 
-**設計重點**：這支指令**只要 CI 一有結論（全過／有失敗／已合併）就在 3 秒內跳出**；若心跳窗（預設 120 秒，可調）內仍在跑，就印 `RESULT=RUNNING` 結束該批。**一律以背景（async）方式執行**——它結束時終端機會自動通知你，等於 CI 一結束（≤3 秒）你就會被叫醒，立刻發合併提醒；因為它會自己結束，不會 hang、也不會假性 timeout。**絕不可停在 `RESULT=RUNNING`**：收到 RUNNING 先回報一次心跳，然後**立即再跑下一批**，直到收斂為 `READY`/`FAILED`/`BLOCKED`/`BEHIND`/`CONFLICT`/`MERGED_OR_CLOSED` 才停。
+**設計重點**：這支指令**只要 CI 一有結論（全過／有失敗／已合併）就在 3 秒內跳出**；若心跳窗（預設 120 秒，可調）內仍在跑，就印 `RESULT=RUNNING` 結束該批。**以「有界的同步批次」執行：由你自己一批接一批跑，直到有結論為止；不要 fire 成背景（async）然後結束回合等通知。** 原因：async 只會在「這一批指令結束」時通知你，而這批通常是在心跳窗到點（`RESULT=RUNNING`、CI 其實還沒好）就結束——你若此時結束回合，就沒有任何輪詢在跑了，等 GitHub 稍後才跑完時**沒人發現、agent 就此沉默**（這正是「GitHub 已完成、agent 沒反應」的成因）。因為每批會自己結束，不會 hang、也不會假性 timeout。**絕不可停在 `RESULT=RUNNING`**：收到 RUNNING 先回報一句心跳，然後**在同一個回合內立刻再跑下一批**，直到收斂為 `READY`/`FAILED`/`BLOCKED`/`BEHIND`/`CONFLICT`/`MERGED_OR_CLOSED` 才停。
 
 PowerShell：
 
@@ -241,7 +241,7 @@ PR 進入可合併狀態後（CI 全過，或此 repo 無必需 CI 但 GitHub �
 
 - 不直接 push 到 `main`。
 - **不自行 merge PR。** 必須等使用者**點下 [Confirm merge] 按鈕**、按下 GitHub 的 Confirm merge 按鈕，或明確打 `confirm merge`；模糊回覆不算授權。確認一律以按鈕呈現，不要使用者打字。
-- PR 建立後**必須持續監控至有明確結論**（`READY` / `FAILED` / `BLOCKED` / `BEHIND` / `CONFLICT`）：監控**一律以背景（async）執行**，收到 `RESULT=RUNNING` 一定**立即再跑下一批**，不可停在 RUNNING、不可只查一次就結束回合。
+- PR 建立後**必須持續監控至有明確結論**（`READY` / `FAILED` / `BLOCKED` / `BEHIND` / `CONFLICT`）：監控**以有界的同步批次執行、由你自己一批接一批驅動**，收到 `RESULT=RUNNING` 一定**在同一個回合內立即再跑下一批**；**不可 fire 成背景（async）後就結束回合等通知**——async 只在批次到點時通知，常在 CI 尚未完成時就結束，會造成「GitHub 已完成、agent 沒反應」；亦不可停在 RUNNING、不可只查一次就結束回合。
 - 不在開 PR 的過程中順手修改程式碼；發現問題先回報，由使用者決定。
 - 不 force push 已被 review 過的分支（必要時改用新 commit）。
 - PR body 中不出現機密資訊、客戶專案代號、成本數字。

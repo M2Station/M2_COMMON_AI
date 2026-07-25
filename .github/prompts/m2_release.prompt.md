@@ -59,16 +59,27 @@ git commit -am "chore(release): bump version to <NEW_VERSION>"   # 格式沿用 
 git push -u origin release/<NEW_VERSION>
 ```
 
-## 3. 開 PR 並合併
+## 3. 開 PR、監控 CI、確認後合併
 
 ```bash
 gh pr create --base main --title "<沿用歷史格式>" --body "<摘要 + 變更清單>"
-gh pr checks --watch          # 等 CI 綠燈，失敗則停止並回報
-gh pr merge --squash --delete-branch
 ```
 
-> ⏸ **合併前停下來**，回報「將要發布的版號 + PR 連結 + 變更檔案清單」，並**以可點選按鈕**請使用者確認：**[Confirm release] / [取消]**（不要求打字，打字僅作備援）。點 **[Confirm release]** 即為授權合併。
-> （若要全自動，刪除此行。）
+**監控 CI：沿用 `/m2_pr` 第 5 節的自結束輪詢**，不要用 `gh pr checks --watch`（CI 無輸出時會被終端機判 idle 而假性 timeout，無必需 CI 時會空等）。以 `gh pr view --json state,mergeStateStatus,statusCheckRollup` 輪詢，一有結論即跳出，**一律以背景（async）執行，收到 `RESULT=RUNNING` 必須立即再跑下一批，不可停在 RUNNING**：
+
+- `RESULT=READY`（CI 全過，或無必需 CI 已 mergeable）→ 進入下方確認關卡。
+- `RESULT=FAILED` → **停止發版**，`gh run view <run-id> --log-failed` 讀根因回報；不重試、不繞過、不改 workflow。
+- `RESULT=RUNNING` → 回報一次心跳，再跑下一批。
+- `RESULT=BLOCKED`／`BEHIND`／`CONFLICT` → 回報卡點（缺 review／需更新分支／有衝突），交使用者處理，不自行動作。
+
+> ⏸ **CI 綠燈後、合併前停下來**，回報「將要發布的版號 + PR 連結 + 變更檔案清單 + CI 耗時」，並**用互動式選擇工具彈出真正可點的按鈕**（不是把方括號當文字印出）請使用者確認：**[Confirm release]（最建議） / [取消]**（不要求打字，打字僅作備援）。點 **[Confirm release]** 即為授權合併。
+> （若要全自動，刪除此段確認。）
+
+確認後才合併（merge 策略沿用 repo 歷史）：
+
+```bash
+gh pr merge --squash --delete-branch
+```
 
 ## 4. 打 tag 並推送
 
@@ -82,12 +93,43 @@ git push origin <TAG>
 - **tag 必須指向合併後的 main HEAD**，不可在 PR 分支或合併前打 tag。
 - 推送 tag 前確認 `git log -1` 的 commit 就是版本 bump commit。
 
-## 5. 驗證
+## 5. 驗證 publish workflow
+
+`gh run watch` 同樣會在 job 無輸出時被終端機判 idle 而假性 timeout；改用會**自己結束**的輪詢追蹤 tag 觸發的 publish run（一律背景執行，一完成即通知你；收到 `RESULT=RUNNING` 必須再跑下一批）：
+
+PowerShell：
+
+```powershell
+$wf  = '<publish workflow 檔名，取自第 0 節>'   # 例 publish.yml / release.yml
+$end = (Get-Date).AddSeconds(120)          # 心跳窗，可調
+do {
+    $r = gh run list --workflow $wf --limit 1 --json databaseId,status,conclusion,workflowName,url |
+         ConvertFrom-Json | Select-Object -First 1
+    Write-Host ("[{0}] {1} status={2} conclusion={3}" -f (Get-Date -f HH:mm:ss), $r.workflowName, $r.status, $r.conclusion)
+    if ($r.status -eq 'completed') { "RESULT=$($r.conclusion)"; break }   # success / failure / cancelled
+    if ((Get-Date) -ge $end)       { 'RESULT=RUNNING'; break }
+    Start-Sleep -Seconds 3
+} while ($true)
+```
+
+Bash：
 
 ```bash
-gh run watch                  # 追蹤 publish workflow
-gh release view <TAG>         # 若 workflow 會建立 release
+WF='<publish workflow 檔名，取自第 0 節>'
+END=$(( $(date +%s) + 120 ))
+while :; do
+  R=$(gh run list --workflow "$WF" --limit 1 --json databaseId,status,conclusion,workflowName,url)
+  S=$(jq -r '.[0].status' <<<"$R"); C=$(jq -r '.[0].conclusion' <<<"$R")
+  echo "[$(date +%T)] $(jq -r '.[0].workflowName' <<<"$R") status=$S conclusion=$C"
+  [ "$S" = completed ] && { echo "RESULT=$C"; break; }
+  [ "$(date +%s)" -ge "$END" ] && { echo RESULT=RUNNING; break; }
+  sleep 3
+done
 ```
+
+- `RESULT=success` → 發布完成；若 workflow 會建立 release，`gh release view <TAG>` 確認。
+- `RESULT=failure`／其他 → `gh run view <run-id> --log-failed` 讀根因回報；不重跑、不繞過。
+- `RESULT=RUNNING` → 回報心跳後再跑下一批。
 
 回報：版號、tag、PR 連結、CI run 連結、發布結果。
 

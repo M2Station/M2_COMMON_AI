@@ -12,6 +12,23 @@
 
 ---
 
+## v1.5.0 — 2026-07-25
+
+### 變更
+
+- **CI／PR 監控改為「會自己結束」的輪詢**，修掉假性 timeout 與「網頁已可合併卻空等」：
+  - `m2_pr` §5 重寫：立即快照 + 自結束輪詢批次，依 `mergeStateStatus` 收斂為
+    `READY/FAILED/BLOCKED/BEHIND/CONFLICT/MERGED_OR_CLOSED`；一律背景（async）執行、
+    收到 `RESULT=RUNNING` 立即再跑，CI 一有結論 ≤3 秒跳出，不再用 `gh pr checks --watch`。
+  - `m2_release` §3／§5 沿用同一套自結束監控（PR CI + publish run），移除 `gh run watch`。
+- **確認節點改用互動式選擇工具的真按鈕**，並要求標一個 `（最建議）` 預設：
+  - `copilot-instructions.md` §1／§8 立為中央規則：按鈕＝互動式選擇工具（非純文字），
+    且每個決策點必須標一個 `（最建議）`。
+  - `m2_pr` / `m2_release` / `m2_review` / `m2_next` 各確認點一併套用。
+- 向後相容（打字仍作備援、確認節點位置不變），故列為 minor。
+
+---
+
 ## v1.4.0 — 2026-07-24
 
 ### 變更

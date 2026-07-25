@@ -16,6 +16,7 @@
 - Answers should be concise and give the conclusion and runnable code directly; no pleasantries or restating the question.
 - State "not sure" explicitly where uncertain; do not guess APIs, parameter names, or file structure.
 - When the user must **choose or confirm** anything, render the options as a **real interactive choice list (actual clickable buttons)** using the client's built-in question/choice prompt mechanism — do **not** merely print `[Option]` brackets as text in a normal reply, which renders as plain text and forces the user to type. Always **mark exactly one option as the recommended default** (append `（最建議）` to its label, or set the prompt's "recommended" flag). Free typing stays available only as a fallback. This applies to every decision point, confirmations included.
+- **Emit an audible cue whenever you need the user.** Before you pause for input, a choice, or any confirmation — i.e. any point where you hand control back and wait — play a short beep via a quick terminal command so the user notices without watching the screen: PowerShell `[console]::beep(880,200); [console]::beep(1320,300)` (bash/zsh: `printf '\a'`). Best-effort only (depends on OS sound); for a reliable native chime the user can additionally enable VS Code Accessibility Signals — run **Help: List Signal Sounds** or configure `accessibility.signals.*` in settings.
 
 ---
 

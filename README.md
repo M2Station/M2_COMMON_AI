@@ -80,7 +80,7 @@ M2_COMMON_AI/
 1. 下游 workflow 觸發：排程（台灣時間每天 05:00 / 17:00）或手動 `gh workflow run`。
 2. checkout 公開的中央 repo（免 token），讀 `.github/sync-manifest.txt`。
 3. 逐行同步，路徑相對於 `.github/`：
-   - 結尾 `/` → 資料夾，`rsync --delete`（中央沒有的檔案，下游會一併刪掉）
+   - 結尾 `/` → 資料夾，overlay 覆蓋（只覆寫與中央同名的檔案；下游自己多出來的檔案保留不刪）
    - 無 `/` → 單檔，`cp` 覆寫
 4. 只有 manifest 列的路徑「實際有變化」才寫 `.github/M2_COMMON_AI_VERSION`（來源版本戳記，含本次變更的檔案清單）並開一個 PR；無變化就靜默結束，不開空 PR。
 5. 你在下游 review、合併那個 PR，設定即生效。
@@ -285,10 +285,11 @@ Windows PowerShell 5.1 在檔案**沒有 BOM** 時，會以系統 ANSI codepage�
 
 ### 同步是覆蓋式的
 
-同步範圍與流程見上方〈同步機制〉。重點在它**會覆蓋、資料夾還會 `rsync --delete`**：
+同步範圍與流程見上方〈同步機制〉。重點在它**會覆蓋同名檔案**（資料夾為 overlay，不刪下游多出來的檔案）：
 
-- **專案特定內容不要寫進被同步的路徑**（目前 `copilot-instructions.md`、`prompts/`、`instructions/`），下次同步就沒了。
-- 專案專屬規範請放 `.github/<project>-instructions/`（不列進 manifest 就不會被同步）。
+- **專案特定內容不要寫進「與中央同名」的檔案**（目前 `copilot-instructions.md`，以及 `prompts/`、`instructions/` 內與中央同名者），下次同步就沒了。
+- 下游要放自己的 prompt，**取一個中央沒有的檔名**即可留在 `prompts/`；或放 `.github/<project>-instructions/`（不列進 manifest 就完全不碰）。
+- 反過來說：中央刪掉某個 prompt 時，下游的舊檔不會自動消失，需自行清理。
 
 ### 通用規範不記錄專案資訊
 

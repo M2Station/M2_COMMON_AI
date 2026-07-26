@@ -175,6 +175,7 @@ When the user's message matches the semantics below, **read the corresponding pr
 | `pr` / `PR` / "open PR" / "submit for review" / `open pull request` | `.github/prompts/m2_pr.prompt.md` | Open PR -> monitor CI every 3 seconds -> remind the user to confirm the merge |
 | `next` / `cleanup` / "wrap up" / "clean up branches" / "back to main" / "ready for next" / "收尾" / "準備下一輪" | `.github/prompts/m2_next.prompt.md` | Post-merge cleanup -> delete merged branch, sync main, verify clean tree, ready for next |
 | `release` / "ship a version" / "publish a new version" / "cut a release" / `bump version` | `.github/prompts/m2_release.prompt.md` | Version bump -> PR -> merge -> tag -> CI publish |
+| `release ci` / `installer` / "portable + setup" / "silent install" / "packaging spec" / "打包規格" / "發版 CI" / "自動更新裝不起來" | `.github/prompts/m2_release.prompt.md` (**Appendix A**) | Release CI spec: Portable + Setup per arch, silent-install contract, asset naming |
 
 ### Routing Rules
 
@@ -182,7 +183,8 @@ When the user's message matches the semantics below, **read the corresponding pr
 - If the user only says "release" without specifying a version -> compute the next version per the prompt file rules, report it, then execute.
 - When no prompt file matches, **do not invent a release or PR flow** - ask first.
 - When a prompt file's rules conflict with this file, **the prompt file takes precedence** (it is the dedicated spec for that task).
-- All four flows have a "stop and wait for user confirmation" node; do not skip it for the sake of a smooth flow.
+- **Appendix A of `m2_release.prompt.md` is a specification, not a flow**: read it only when building/changing build & release CI or installer scripts (or porting the spec to another repo). A routine version release uses sections 1-5 only and must NOT touch the workflow.
+- The four flow prompts (`m2_review` / `m2_pr` / `m2_next` / `m2_release`) each have a "stop and wait for user confirmation" node; do not skip it for the sake of a smooth flow.
 
 ## 10. Single-File HTML Tool Conventions (conditional)
 

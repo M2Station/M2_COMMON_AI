@@ -12,6 +12,29 @@
 
 ---
 
+## v2.1.0 — 2026-07-27
+
+### 新增
+
+- **`m2_release` 新增「附錄 A：Release CI 產出規格（Portable + Setup + 靜默安裝）」**，
+  把「M2_APEX 內建自動更新器吃得下的產物」寫成一份驗收契約：
+  - 每次發版必須產出 4 個資產：Portable / Setup × x64 / arm64，檔名規則對齊 APEX 的
+    `PickAsset()`／`IsInstallerAsset()`（單一架構 token、Setup 必含 `setup`、Portable 不可含）。
+  - 靜默安裝契約：`/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS` 需 exit code 0、
+    全程無視窗；**app 執行中仍須能靜默覆蓋升級**（`.iss` 需 `AppMutex` 與 `CloseApplications=yes`，
+    且 app 本體要建同名 single-instance mutex）。
+  - exe 的 `ProductVersion` 必須是純 `X.Y.Z`（含 `+gitsha` 會被解析成 patch=0，誤判成「沒有更新」）。
+  - 另含 Release CI 必做事項清單、常見地雷對照表、發版後驗收清單、M2_APEX catalog 登記格式。
+- **`copilot-instructions` §9 新增 routing 條目**：`release ci`／`installer`／「打包規格」／
+  「自動更新裝不起來」等語意，導向 `m2_release.prompt.md` 附錄 A。
+
+### 說明
+
+- 附錄 A 是**規格，不是流程**：只在建置／修改 build & release CI 或安裝檔腳本時讀；
+  日常發一版仍走第 1～5 節，且不得順手改 workflow。既有發版流程行為不變。
+
+---
+
 ## v2.0.0 — 2026-07-26
 
 ### 變更（破壞性）

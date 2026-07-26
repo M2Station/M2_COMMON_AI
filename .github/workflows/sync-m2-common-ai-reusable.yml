@@ -69,7 +69,7 @@ jobs:
           fi
 
           # manifest 每行一個路徑，相對於 .github/：
-          #   行尾為 / → 資料夾，用 rsync --delete（中央沒有的檔案，下游會被刪）
+          #   行尾為 / → 資料夾，overlay 覆蓋（只覆寫中央有的同名檔；下游自有的檔案保留不刪）
           #   否則     → 單檔，用 cp 覆寫
           #   # 開頭與空行略過
           synced=()
@@ -96,7 +96,9 @@ jobs:
             if [[ "$path" == */ ]]; then
               [[ -d "$src" ]] || { echo "::error::中央缺少資料夾：.github/$path"; exit 1; }
               mkdir -p "$dst"
-              rsync -av --delete "$src" "$dst"
+              # 刻意不加 --delete：下游 repo 可在同一資料夾放自己的 prompt/instruction，
+              # 只要檔名不與中央重複就會被保留。代價是中央刪檔不會傳播，需下游自行清理。
+              rsync -av "$src" "$dst"
             else
               [[ -f "$src" ]] || { echo "::error::中央缺少檔案：.github/$path"; exit 1; }
               mkdir -p "$(dirname "$dst")"

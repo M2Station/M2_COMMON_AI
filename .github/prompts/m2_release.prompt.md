@@ -5,10 +5,12 @@ mode: agent
 
 # Release
 
-**觸發**：`/m2_release`、`/m2_release <version>`
+**觸發**：`/m2_release`、`/m2_release <version>`、`/m2_release auto`
 
 - `/m2_release` → 依規則自動計算下一版號
 - `/m2_release 0.4.1` → 使用指定版號，跳過第 1 節計算
+- `/m2_release auto` → **全自動**：bump → PR → CI 綠 → 自行合併 → tag → push，不停下來問（見 §Auto 模式）；
+  可並用，例 `/m2_release 0.4.1 auto`
 
 執行一次完整發版。流程為 **bump → PR → merge → tag → push tag → CI publish**。
 
@@ -74,7 +76,7 @@ gh pr create --base main --title "<沿用歷史格式>" --body "<摘要 + 變更
 - `RESULT=BLOCKED`／`BEHIND`／`CONFLICT` → 回報卡點（缺 review／需更新分支／有衝突），交使用者處理，不自行動作。
 
 > ⏸ **CI 綠燈後、合併前停下來**，回報「將要發布的版號 + PR 連結 + 變更檔案清單 + CI 耗時」，並**用互動式選擇工具彈出真正可點的按鈕**（不是把方括號當文字印出）請使用者確認：**[Confirm release]（最建議） / [取消]**（不要求打字，打字僅作備援）。點 **[Confirm release]** 即為授權合併。
-> （若要全自動，刪除此段確認。）
+> 使用者打的是 `/m2_release auto` 時，本節點改走文末的 **§Auto 模式**（自行合併）。
 
 確認後才合併（merge 策略沿用 repo 歷史）：
 
@@ -136,6 +138,54 @@ done
 
 ---
 
+## Auto 模式（`/m2_release auto`）
+
+通用契約見 `copilot-instructions.md` §9「Auto Mode」。這裡只講本流程的差異。
+
+發版是最難回收的流程（tag 一推、CI 一發布就收不回來），所以 `auto` **只免掉第 3 節的按鈕**，
+所有查證與中止條件一律保留。
+
+### 第 3 節改為自行合併
+
+`RESULT=READY` 後不彈 [Confirm release]，直接合併——但**合併前先查證 PR 身分**（`gh pr create` 的輸出不可信）：
+
+```bash
+N=$(gh api "repos/{owner}/{repo}/pulls?head={owner}:release/<NEW_VERSION>&state=open" --jq '.[0].number')
+gh api repos/{owner}/{repo}/pulls/$N --jq '{head:.head.ref, base:.base.ref, title, mergeable_state}'
+```
+
+`head.ref` 必須是 `release/<NEW_VERSION>`、`base.ref` 是 `main`，對不上就**中止**。
+
+### auto 下的決策規則
+
+| 節點 | auto 的做法 |
+|---|---|
+| 版號 | 未指定 → 依第 1 節規則算（patch+1，滿 9 進位）；**算出來先印出來再執行** |
+| tag 格式、PR / commit 文案 | 一律比對 `git tag --sort=-v:refname` 與 `gh pr list --state merged` 的歷史沿用 |
+| CHANGELOG 內容 | 取 `<LAST_TAG>..HEAD` 的 commit 整理，沒有可寫的就不寫，**不編造** |
+| merge 策略 | 依 repo 歷史（本 repo 為 `--squash --delete-branch`） |
+| CI / publish 失敗要不要重跑 | **不重跑**。回報失敗的 run 與 log，交給使用者 |
+
+### auto 仍然中止的情況
+
+除了 §9 列的通用 ABORT 條件，本流程額外（任一成立就停，**已做的不回退，但不再往下跑**）：
+
+- 開工前 `git fetch origin`，`git rev-list --left-right --count origin/main...HEAD` 左邊不是 `0` → 本機落後，**立刻中止**
+- `main` 上的版本號與最新 tag **不一致** → 中止（基準不確定就不能算下一版）
+- 版本號出現在多處但**內容不一致** → 中止
+- 目標 tag **已存在**，或算出來的版號**已出現在 `CHANGELOG.md`** → 中止（絕不 `-f`、絕不刪既有 tag、絕不重用版號）
+- `RESULT` 為 `FAILED` / `BLOCKED` / `BEHIND` / `CONFLICT` → 中止，**不合併、不打 tag**
+- 合併後 `git pull --ff-only` 非快轉，或 `git log -1` 不是那個 bump commit → **中止，不打 tag**
+- 本次 PR 除了版本號與 CHANGELOG 之外還改到別的檔 → 中止（release PR 不得夾帶，含附錄 A）
+
+### auto 的最終報告
+
+嚶一聲後輸出：實際執行的步驟、代你做的決定與依據（尤其是版號怎麼算的、merge 策略依據什麼）、
+最終狀態（版號 / tag / PR 連結 / merge SHA / publish run 連結 / 發布結果），以及還需要使用者確認的事。
+**publish 未確認 `RESULT=success` 就不能寫「已發布」**。
+
+---
+
 ## 硬性規則
 
 - 不直接 push 到 `main`，一律走 PR。
@@ -145,6 +195,7 @@ done
 - tag 已存在時停止並回報，不使用 `-f` 覆寫、不刪除既有 tag。
 - 版本號格式、tag 格式、commit / PR 文案一律比對 repo 歷史後沿用。
 - 任何步驟出現與預期不符（版本號不一致、branch 非乾淨、pull 非 fast-forward）→ 停下來回報，不自行修補。
+- 第 3 節的 [Confirm release] 按鈕**唯一可以免掉的情況是使用者明打了 `/m2_release auto`**；不得從「你直接做」「不用問我」之類的語氣**推論**出 auto 模式。auto 也不免掉上面任何一條硬性規則。
 
 ---
 

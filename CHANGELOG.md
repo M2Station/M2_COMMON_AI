@@ -12,7 +12,53 @@
 
 ---
 
-## v2.1.0 — 2026-07-27
+## v2.2.0 — 2026-07-27
+
+### 新增
+
+- **新增 `/m2_evolve`（`.github/prompts/m2_evolve.prompt.md`）** — 長時間自主迭代優化流程。
+  給一個目標，agent 在 **12 小時時間預算**內反覆執行「找改進點 → 改 → 驗證 → smoke test → 收或退」，
+  收斂或預算用盡才停。
+  - 啟動前以互動式按鈕訪談六件事（範圍、專案輪廓、期望成果、改進重點、自主程度、checkpoint 模式），
+    產出**凍結的 CHARTER**；目標無法量測就追問到可驗收為止。沒有 smoke test 就先建一個。
+  - 全程寫入 `.evolve/<run-id>/`（CHARTER / BASELINE / STATE.json / LEDGER.md），
+    支援 `/m2_evolve resume` 冷啟動接續；帳本以 `.git/info/exclude` 忽略，**不改 `.gitignore`**。
+  - 三種 checkpoint 模式（`ask` / `notify` / `silent`）、檔案 kill switch（`.evolve/STOP`、`.evolve/PAUSE`），
+    以及不可停用的 tripwire（連續 revert、blast radius 超標、要動公開 API/相依/schema、發現安全漏洞…）。
+  - 「絕不作弊」硬性規則：不得改測試遷就實作、不得 skip/刪測試、不得放寬 lint 或 smoke test；
+    回合報告固定列出「測試數」與「lint 問題數」前後對比。
+  - 只在 `evolve/*` 分支工作，**不自行開 PR、不自行 merge** — 回合結束交給 `/m2_pr`。
+  - Git 安全：commit 只 add 本迭代動到的檔（禁用 `git add -A`）、送出前 `git diff --cached` 自檢機密資料；
+    退回時用 `git restore` + 逐一刪除本迭代新建的檔（**禁用 `git clean -fd` / `git reset --hard`**）。
+- **全自動模式：指令後面加 `auto`** — `/m2_pr auto`、`/m2_next auto`、`/m2_release auto`。
+  agent 自行解決每個確認節點，一路跑到任務完成，最後才輸出單一的工作流程 + 結果報告。
+  - `auto` 為後置修飾字，可與現有參數並用：`/m2_pr draft auto`、`/m2_next 42 auto`、`/m2_release 0.4.1 auto`。
+  - 只有這三支支援；`/m2_review` 不改狀態、`/m2_evolve` 已有 `checkpoint silent`。
+  - **必須明打 `auto`**；不得從「你直接做」「不用問我」推論出 auto 模式。
+- **`copilot-instructions.md` §9 新增「Auto Mode」通用契約**（三支 prompt 共用）：
+  - 決策規則：優先選 repo 歷史支持的選項；**無依據且不可逆 → 中止**。
+  - ABORT 清單（`auto` 一律不免）：CI 紅/逾時/取消、diff 含機密資料、已追蹤檔未 commit、
+    **本機落後 `origin`**、PR 身分無法查證、tag 或版號已被用掉、合併衝突、需繞過 branch protection。
+  - 永久禁止（任何模式）：force push、`git reset --hard`、`git clean -fd`、刪未追蹤檔、
+    `git branch -D`、直推 `main`、本機發布產物。
+  - **開工前強制新鮮度檢查**：`git fetch origin` 後確認 `git rev-list --left-right --count origin/main...HEAD`
+    左邊為 `0`。落後的 base 是最具破壞性的失敗模式 —— 所有編輯都對到舊檔，開出來的 PR 會回退掉期間已合併的工作。
+  - **合併/刪分支前強制用 `gh api` 查證 PR 身分**（`head.ref` / `base.ref` / title 全對）——
+    `gh pr create` 的輸出與 `gh pr list` 均不可單獨作為依據。
+
+### 變更
+
+- `m2_pr` / `m2_next` / `m2_release` 各新增一節「Auto 模式」，明訂哪個節點被自動化、依什麼判斷、
+  以及哪些情況仍然中止；硬性規則同步註明 auto 是唯一例外。
+  - `m2_next auto`：工作區只有未追蹤檔 → 保留並繼續；有已追蹤檔的未 commit 變更 → 中止。
+    只刪本次 PR 的分支，其他已合併分支只列出不代為刪。
+  - `m2_release auto`：版本號與最新 tag 不一致、算出的版號已在 CHANGELOG、合併後 HEAD 不是 bump commit、
+    release PR 夾帶其他檔案 → 一律停下並不打 tag。
+- `copilot-instructions.md` §9 原本「不可跳過確認節點」的規則修正為「唯一例外是使用者明打 `auto`」，
+  並補上 `/m2_evolve` 的 routing 條目與「與主流程正交」的說明。
+- README 新增 `/m2_evolve` 與「全自動：指令後面加 `auto`」說明，目錄樹補齊五支 prompt。
+
+---
 
 ### 新增
 

@@ -18,7 +18,7 @@
 | `/m2_pr` | 開 PR → 每 3 秒輪詢 CI → 全過時提醒你確認合併 | 不會 |
 | `/m2_next` | PR 合併後收尾：刪已合併分支、回到並更新 main、確認乾淨、備妥下一輪 | 只清理分支/切 main |
 | `/m2_release` | 算版號 → bump PR → merge → tag → CI 發布 | 只改版本號 |
-| `/m2_evolve` | 長時間自主迭代優化：12h 預算內不斷「找改進點 → 改 → 驗證 → 收或退」 | 會（只在 `evolve/*` 分支，每筆都驗證過才 commit） |
+| `/m2_evo` | 長時間自主迭代優化：12h 預算內不斷「找改進點 → 改 → 驗證 → 收或退」 | 會（只在 `evolve/*` 分支，每筆都驗證過才 commit） |
 
 建議串接使用：
 
@@ -26,7 +26,7 @@
 寫完 code  →  /m2_review  →  修 Blocker  →  /m2_pr  →  你按 Confirm merge  →  /m2_next（收尾）  →（要發版才）/m2_release
 ```
 
-`/m2_evolve` 是**旁支**，不在主流程上：它在 `evolve/*` 分支上累積 commit，回合結束後再交給 `/m2_pr`。
+`/m2_evo` 是**旁支**，不在主流程上：它在 `evolve/*` 分支上累積 commit，回合結束後再交給 `/m2_pr`。
 
 版號規則：patch 逐一遞增，滿 9 進位到 minor。
 `0.3.0 → 0.3.1`、`0.3.9 → 0.4.0`、`0.9.9 → 1.0.0`
@@ -46,7 +46,7 @@ agent 自行判斷每個確認節點的最優解，一路跑到任務完成，�
 /m2_pr draft auto      可與其他參數並用（如 /m2_release 0.4.1 auto、/m2_next 42 auto）
 ```
 
-- 只有這三支有 `auto`。`/m2_review` 不改狀態；`/m2_evolve` 改用 `checkpoint silent`。
+- 只有這三支有 `auto`。`/m2_review` 不改狀態；`/m2_evo` 改用 `checkpoint silent`。
 - **必須明打 `auto`** 才生效；說「你直接做」「不用問我」不算。
 - **`auto` 不免掉安全底線**：本機落後 `origin/main`、CI 紅、diff 裡有密鑰、
   tag 已存在、合併衝突、PR 身分查證不過 → 一律**中止並回報**，不猜、不繞過。
@@ -69,7 +69,7 @@ M2_COMMON_AI/
 │   │   ├── m2_pr.prompt.md           ← /m2_pr
 │   │   ├── m2_next.prompt.md         ← /m2_next
 │   │   ├── m2_release.prompt.md      ← /m2_release
-│   │   └── m2_evolve.prompt.md       ← /m2_evolve
+│   │   └── m2_evo.prompt.md          ← /m2_evo
 │   ├── instructions/                 ← 分領域規範（applyTo glob），目前為空
 │   └── workflows/
 │       ├── validate.yml              ← CI：檢查格式，防止推壞

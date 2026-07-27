@@ -18,6 +18,7 @@
 | `/m2_pr` | 開 PR → 每 3 秒輪詢 CI → 全過時提醒你確認合併 | 不會 |
 | `/m2_next` | PR 合併後收尾：刪已合併分支、回到並更新 main、確認乾淨、備妥下一輪 | 只清理分支/切 main |
 | `/m2_release` | 算版號 → bump PR → merge → tag → CI 發布 | 只改版本號 |
+| `/m2_evolve` | 長時間自主迭代優化：12h 預算內不斷「找改進點 → 改 → 驗證 → 收或退」 | 會（只在 `evolve/*` 分支，每筆都驗證過才 commit） |
 
 建議串接使用：
 
@@ -25,18 +26,38 @@
 寫完 code  →  /m2_review  →  修 Blocker  →  /m2_pr  →  你按 Confirm merge  →  /m2_next（收尾）  →（要發版才）/m2_release
 ```
 
+`/m2_evolve` 是**旁支**，不在主流程上：它在 `evolve/*` 分支上累積 commit，回合結束後再交給 `/m2_pr`。
+
 版號規則：patch 逐一遞增，滿 9 進位到 minor。
 `0.3.0 → 0.3.1`、`0.3.9 → 0.4.0`、`0.9.9 → 1.0.0`
 
-四支指令都有「停下來等你確認」的節點。特別注意：**回覆「OK」不算合併授權**，
+五支指令都有「停下來等你確認」的節點。特別注意：**回覆「OK」不算合併授權**，
 必須明確回 `confirm merge` 或自己按 GitHub 上的按鈕。
+
+### 全自動：指令後面加 `auto`
+
+`/m2_pr`、`/m2_next`、`/m2_release` 支援後置 `auto`，表示**不需要你參與決策**：
+agent 自行判斷每個確認節點的最優解，一路跑到任務完成，最後才彙整工作流程與結果報告。
+
+```text
+/m2_pr auto            開 PR → 監控 CI → 可合併就自行合併
+/m2_next auto          自行收尾（雙重查證合併 → 回 main → 刪本次分支）
+/m2_release auto       bump → PR → CI 綠 → 合併 → tag → push
+/m2_pr draft auto      可與其他參數並用（如 /m2_release 0.4.1 auto、/m2_next 42 auto）
+```
+
+- 只有這三支有 `auto`。`/m2_review` 不改狀態；`/m2_evolve` 改用 `checkpoint silent`。
+- **必須明打 `auto`** 才生效；說「你直接做」「不用問我」不算。
+- **`auto` 不免掉安全底線**：本機落後 `origin/main`、CI 紅、diff 裡有密鑰、
+  tag 已存在、合併衝突、PR 身分查證不過 → 一律**中止並回報**，不猜、不繞過。
+- 完整契約（決策規則、ABORT 清單、報告格式）寫在 `.github/copilot-instructions.md` §9。
 
 ---
 
 ## 目錄結構
 
 `.github/` 就是 source of truth。中央 repo 自己也吃自己的設定，
-所以在這個 repo 裡開 Copilot Chat 就能直接測試四支指令。
+所以在這個 repo 裡開 Copilot Chat 就能直接測試五支指令。
 
 ```text
 M2_COMMON_AI/
@@ -46,7 +67,9 @@ M2_COMMON_AI/
 │   ├── prompts/                      ← slash 指令，打 / 才觸發
 │   │   ├── m2_review.prompt.md       ← /m2_review
 │   │   ├── m2_pr.prompt.md           ← /m2_pr
-│   │   └── m2_release.prompt.md      ← /m2_release
+│   │   ├── m2_next.prompt.md         ← /m2_next
+│   │   ├── m2_release.prompt.md      ← /m2_release
+│   │   └── m2_evolve.prompt.md       ← /m2_evolve
 │   ├── instructions/                 ← 分領域規範（applyTo glob），目前為空
 │   └── workflows/
 │       ├── validate.yml              ← CI：檢查格式，防止推壞

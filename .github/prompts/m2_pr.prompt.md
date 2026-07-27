@@ -5,11 +5,14 @@ mode: agent
 
 # Pull Request
 
-**觸發**：`/m2_pr`、`/m2_pr draft`、`/m2_pr <補充說明>`
+**觸發**：`/m2_pr`、`/m2_pr draft`、`/m2_pr <補充說明>`、`/m2_pr auto`
 
 - `/m2_pr` → 從當前分支開一個 ready-for-review 的 PR
 - `/m2_pr draft` → 開成 draft PR
 - `/m2_pr <說明>` → 將補充說明納入 PR body 的動機段落
+- `/m2_pr auto` → **全自動**：開 PR → 監控到 `READY` → 自行合併，不停下來問（見 §Auto 模式）
+
+> `auto` 是後置修飾字，可與其他參數並用：`/m2_pr draft auto`、`/m2_pr 修好匯率錯誤 auto`。
 
 > 發版用的版本 bump PR 請用 `/m2_release`，不要走這支流程。
 
@@ -199,6 +202,8 @@ done
 
 ## 6. PR 可合併（READY）→ 提醒使用者確認合併
 
+> 使用者打的是 `/m2_pr auto` 時，**本節改走文末的 §Auto 模式**（自行合併，不彈按鈕）。
+
 PR 進入可合併狀態後（CI 全過，或此 repo 無必需 CI 但 GitHub 已顯示 mergeable），**必須主動發出明顯提醒**，然後停下來等待。
 
 ```powershell
@@ -237,10 +242,82 @@ PR 進入可合併狀態後（CI 全過，或此 repo 無必需 CI 但 GitHub �
 
 ---
 
+## Auto 模式（`/m2_pr auto`）
+
+通用契約見 `copilot-instructions.md` §9「Auto Mode」。這裡只講本流程的差異。
+
+**第 0–5 節完全不變** —— 前置檢查、讀 diff、以及第 5 節那套「自己一批接一批驅動」的監控，
+一律照跑。`auto` 只改第 6 節的合併節點。
+
+### 第 6 節改為自行合併
+
+`RESULT=READY` 後不彈按鈕、不等使用者，但**合併前必須先做身分查證**（`gh pr create` 的輸出不可信）：
+
+```bash
+BR=$(git branch --show-current)
+N=$(gh api "repos/{owner}/{repo}/pulls?head={owner}:$BR&state=open" --jq '.[0].number')
+gh api repos/{owner}/{repo}/pulls/$N --jq '{head:.head.ref, base:.base.ref, title, state, mergeable_state}'
+```
+
+確認 `head.ref` 就是你剛推的分支、`base.ref` 是 `main`、title 是你寫的那一個，**三項全對才能合併**。
+任一不對、或查不到唯一的 PR → **中止並回報**，絕不猜一個編號合下去（合錯 PR 幾乎無法還原）。
+
+```bash
+gh pr merge $N --squash --delete-branch     # merge 策略依 repo 歷史，不自行改
+```
+
+### auto 下的決策規則
+
+| 節點 | auto 的做法 |
+|---|---|
+| merge 策略 | 依 repo 歷史（`gh pr list --state merged` 看實際用哪種）；歷史不一致 → 用最近 3 個已合併 PR 的多數決 |
+| reviewer / label | 依 CODEOWNERS 與歷史；不確定就留空，**不阻斷流程** |
+| draft 與否 | 沒打 `draft` 就是 ready-for-review |
+| 第 5 節連續 `RUNNING` | 繼續一批接一批跑，直到有結論或撞上下方的時間上限 |
+| 合併後要不要接 `/m2_next` | **不自行串接**；在報告裡建議即可（要串請打 `/m2_next auto`） |
+
+### auto 仍然中止的情況
+
+除了 §9 列的通用 ABORT 條件，本流程額外：
+
+- **開工前的新鮮度檢查**：`git fetch origin` 後 `git rev-list --left-right --count origin/main...HEAD`
+  左邊不是 `0` → 本機落後，**立刻中止**。在落後的 base 上開 PR 會把別人已合併的東西回退掉。
+- 第 2 節前置檢查任一不過（在 `main` 上、tree 不乾淨、diff 含機密資料、殘留 `console.log`）
+- `RESULT` 為 `FAILED` / `BLOCKED` / `BEHIND` / `CONFLICT` / `MERGED_OR_CLOSED` → 一律中止，**不合併**
+- 監控總耗時超過 30 分鐘仍是 `RUNNING` → 中止並回報，不無限期等下去
+- 已存在同分支的 open PR → 改為更新既有 PR；若內容已被別人 review 過 → 中止並回報
+
+### auto 的最終報告
+
+流程跑完後嗶一聲，輸出：
+
+```markdown
+✅ **`/m2_pr auto` 完成** — PR #<N> 已合併
+
+### 實際執行的步驟
+1. …
+
+### 我代你做的決定
+| 節點 | 選了什麼 | 依據 |
+|---|---|---|
+| merge 策略 | `--squash` | 最近 10 個已合併 PR 全部是 squash |
+
+### 最終狀態
+- PR：<url>｜merge commit：<sha>｜分支：已刪除
+- CI：<N>/<N> passed（<mm:ss>）<run url>
+
+### 還需要你做的
+- <UI 截圖 / 手動驗證 / 建議接 `/m2_next auto`>
+```
+
+---
+
 ## 硬性規則
 
 - 不直接 push 到 `main`。
-- **不自行 merge PR。** 必須等使用者**點下 [Confirm merge] 按鈕**、按下 GitHub 的 Confirm merge 按鈕，或明確打 `confirm merge`；模糊回覆不算授權。確認一律以按鈕呈現，不要使用者打字。
+- **不自行 merge PR（預設模式）。** 必須等使用者**點下 [Confirm merge] 按鈕**、按下 GitHub 的 Confirm merge 按鈕，或明確打 `confirm merge`；模糊回覆不算授權。確認一律以按鈕呈現，不要使用者打字。
+  **唯一例外是使用者明打了 `/m2_pr auto`**；不得從「你直接做」「不用問我」之類的語氣**推論**出 auto 模式。
+- auto 模式下：開工前**必須**確認本機沒有落後 `origin/main`；合併前**必須**用 `gh api` 查證 PR 的 `head.ref` / `base.ref` / title 全部對得上。`gh pr create` 的輸出與 `gh pr list` 均不可單獨作為依據。
 - PR 建立後**必須持續監控至有明確結論**（`READY` / `FAILED` / `BLOCKED` / `BEHIND` / `CONFLICT`）：監控**以有界的同步批次執行、由你自己一批接一批驅動**，收到 `RESULT=RUNNING` 一定**在同一個回合內立即再跑下一批**；**不可 fire 成背景（async）後就結束回合等通知**——async 只在批次到點時通知，常在 CI 尚未完成時就結束，會造成「GitHub 已完成、agent 沒反應」；亦不可停在 RUNNING、不可只查一次就結束回合。
 - 不在開 PR 的過程中順手修改程式碼；發現問題先回報，由使用者決定。
 - 不 force push 已被 review 過的分支（必要時改用新 commit）。

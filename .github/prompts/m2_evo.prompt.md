@@ -7,13 +7,13 @@ mode: agent
 
 **觸發**：
 
-- `/m2_evolve` → 啟動新一輪（先訪談）
-- `/m2_evolve <目標>` → 帶著目標啟動，仍會補問缺漏
-- `/m2_evolve resume` → 冷啟動接續未完成的回合（context 斷掉、關掉 VS Code 之後用這個）
-- `/m2_evolve status` → 只讀報告目前進度，不做任何修改
-- `/m2_evolve checkpoint ask|notify|silent` → 隨時切換檢查點模式（見 §3）
-- `/m2_evolve pause` → 暫停在原地，等你說繼續
-- `/m2_evolve stop` → 收斂本回合、產出總結、停止
+- `/m2_evo` → 啟動新一輪（先訪談）
+- `/m2_evo <目標>` → 帶著目標啟動，仍會補問缺漏
+- `/m2_evo resume` → 冷啟動接續未完成的回合（context 斷掉、關掉 VS Code 之後用這個）
+- `/m2_evo status` → 只讀報告目前進度，不做任何修改
+- `/m2_evo checkpoint ask|notify|silent` → 隨時切換檢查點模式（見 §3）
+- `/m2_evo pause` → 暫停在原地，等你說繼續
+- `/m2_evo stop` → 收斂本回合、產出總結、停止
 
 > 一個「回合（round）」= **12 小時時間預算**。回合內由許多「迭代（iteration）」組成，
 > 每個迭代都是一次完整的 找 → 改 → 驗 → 收/退。
@@ -28,7 +28,7 @@ mode: agent
 - Agent 以**真實時鐘**（PowerShell `Get-Date`）計算 deadline 與剩餘時間，**絕不心算日期**。
 - **12 小時是預算，不是回報頻率** — 預設每 3 個迭代或 45 分鐘就有一次 checkpoint（見 §3），
   出事時 tripwire 會立刻中斷，你也可以建一個 `.evolve/STOP` 檔隨時插隊。
-- 每個迭代結束**立刻**把狀態寫進 `.evolve/<run-id>/`，所以隨時可以 `/m2_evolve resume` 冷啟動接續。
+- 每個迭代結束**立刻**把狀態寫進 `.evolve/<run-id>/`，所以隨時可以 `/m2_evo resume` 冷啟動接續。
 - Context 快滿時主動做一次 **compaction**（把必要資訊壓進帳本），再請使用者開新 session 續跑。
 - 使用者中途關掉也不會遺失進度 — 已收下的改進都在 git commit 裡。
 
@@ -307,7 +307,7 @@ commit 格式沿用 repo 歷史（本 repo 為 Conventional Commits）。
 - commit: a1b2c3d
 ```
 
-**再回寫 `STATE.json`**（否則 §4 的停止條件與 `/m2_evolve resume` 都會讀到舊值）。
+**再回寫 `STATE.json`**（否則 §4 的停止條件與 `/m2_evo resume` 都會讀到舊值）。
 單行，`$verdict` 填 `BETTER` / `NEUTRAL_KEPT` / `REVERTED`：
 
 ```powershell
@@ -344,7 +344,7 @@ git push -u origin $branch
 | `notify` | checkpoint 只印進度摘要就繼續，**只有 tripwire 才停** | 你在旁邊做別的事，偶爾瞄一眼 |
 | `silent` | checkpoint 只寫帳本、不打斷，**只有 tripwire 才停** | 你要放著讓它跑 |
 
-切換：`/m2_evolve checkpoint ask|notify|silent` → 寫入 `STATE.json.checkpointMode`，下個迭代生效。
+切換：`/m2_evo checkpoint ask|notify|silent` → 寫入 `STATE.json.checkpointMode`，下個迭代生效。
 **無論哪個模式，tripwire 一律中斷** — 那是安全底線，使用者不能關、agent 更不准自己關。
 
 ### 3.2 什麼時候觸發 checkpoint（先到者算）
@@ -420,7 +420,7 @@ Agent 讀到訊號後必須**回報並照做**（未驗證的改動先按 2.6 �
 | **達標** | CHARTER 所有驗收條件全數滿足，且候選清單無 價值≥4 的項目 |
 | **卡住** | 需要人類決策（規格模糊、要動架構、要加相依、要改公開 API） |
 | **失控** | 連續 3 次 revert 都指向同一根因 → 停下來回報，不硬幹 |
-| **使用者喊停** | `/m2_evolve stop`、checkpoint 選「結束回合」，或偵測到 `.evolve/STOP` |
+| **使用者喊停** | `/m2_evo stop`、checkpoint 選「結束回合」，或偵測到 `.evolve/STOP` |
 
 「完美」不存在。**收斂即成功**，不要為了湊滿 12 小時而製造無意義的 churn。
 
@@ -437,7 +437,7 @@ $p=".evolve/$run/STATE.json"; $s=Get-Content $p -Raw|ConvertFrom-Json; $s.status
 ```
 
 `$final` 依停止原因填：`converged` / `exhausted` / `goal-met` / `stuck` / `stopped`。
-**只有 `running` 會被 `/m2_evolve resume` 接手**；回合結束卻沒改掉，下次 resume 就會錯接到這一輪。
+**只有 `running` 會被 `/m2_evo resume` 接手**；回合結束卻沒改掉，下次 resume 就會錯接到這一輪。
 
 ### 5.2 報告
 
@@ -489,18 +489,18 @@ $p=".evolve/$run/STATE.json"; $s=Get-Content $p -Raw|ConvertFrom-Json; $s.status
 
 | 指令 | 動作 |
 |---|---|
-| `/m2_evolve` ／ `/m2_evolve <目標>` | 從 §0 訪談開始新回合 |
-| `/m2_evolve resume` | 冷啟動接續，見 §6.1 |
-| `/m2_evolve status` | **唯讀**：讀 `STATE.json` + `LEDGER.md` 末段，輸出 §3.3 格式的摘要。不切分支、不改任何檔、不繼續迭代 |
-| `/m2_evolve checkpoint <mode>` | 寫入 `STATE.json.checkpointMode`（`ask`/`notify`/`silent`），下個迭代生效 |
-| `/m2_evolve pause` | 等同於建立 `.evolve/PAUSE`。**注意**：agent 正在跑時你打不了 slash 指令，那時請直接建檔（§3.5） |
-| `/m2_evolve stop` | 等同於建立 `.evolve/STOP`；若 agent 已空閒，則直接跑 §5 收尾（含 5.1 改 `status`） |
+| `/m2_evo` ／ `/m2_evo <目標>` | 從 §0 訪談開始新回合 |
+| `/m2_evo resume` | 冷啟動接續，見 §6.1 |
+| `/m2_evo status` | **唯讀**：讀 `STATE.json` + `LEDGER.md` 末段，輸出 §3.3 格式的摘要。不切分支、不改任何檔、不繼續迭代 |
+| `/m2_evo checkpoint <mode>` | 寫入 `STATE.json.checkpointMode`（`ask`/`notify`/`silent`），下個迭代生效 |
+| `/m2_evo pause` | 等同於建立 `.evolve/PAUSE`。**注意**：agent 正在跑時你打不了 slash 指令，那時請直接建檔（§3.5） |
+| `/m2_evo stop` | 等同於建立 `.evolve/STOP`；若 agent 已空閒，則直接跑 §5 收尾（含 5.1 改 `status`） |
 
 除了 `status` 之外的每一個子指令，都要先確認目前鎖定的是哪一個 run（若有多個 `running`，用按鈕讓使用者選）。
 
 ### 6.1 Resume — 冷啟動接續
 
-`/m2_evolve resume` 時：
+`/m2_evo resume` 時：
 
 1. 找出 `.evolve/` 下 `status = running` 的最新 run（回合正常結束時 §5.1 會把 `status` 改掉，所以這裡只會抓到真正未完成的）
 2. 讀 `CHARTER.md`（目標）、`STATE.json`（進度、checkpoint 模式）、`LEDGER.md` 末段（近況）、`BASELINE.md`（基準）

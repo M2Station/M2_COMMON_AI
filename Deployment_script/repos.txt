@@ -13,3 +13,4 @@ https://github.com/M2Station/M2_APEX
 https://github.com/M2Station/M2_SCOUT
 https://github.com/M2Station/M2_PROMPT
 https://github.com/M2Station/M2_LOG
+https://github.com/M2Station/M2_IP_DEV

@@ -15,6 +15,7 @@
 | 指令 | 用途 | 會不會改你的 code |
 |---|---|---|
 | `/m2_review` | 自我 code review，依 🔴 Blocker／🟡 Should fix／🔵 Nit 分級回報 | 不會（`/m2_review fix` 才會，且逐項確認） |
+| `/m2_smoketest` | App 基本驗證：探索／建立 `smoketest_script/` → 依新功能補測試 → review 與精修 → 執行 → 量化報告（安裝／執行／設定／UX／效能） | 不會改 App code（只寫 `smoketest_script/`，且逐項確認） |
 | `/m2_pr` | 開 PR → 每 3 秒輪詢 CI → 全過時提醒你確認合併 | 不會 |
 | `/m2_next` | PR 合併後收尾：刪已合併分支、回到並更新 main、確認乾淨、備妥下一輪 | 只清理分支/切 main |
 | `/m2_release` | 算版號 → bump PR → merge → tag → CI 發布 | 只改版本號 |
@@ -23,16 +24,19 @@
 建議串接使用：
 
 ```text
-寫完 code  →  /m2_review  →  修 Blocker  →  /m2_pr  →  你按 Confirm merge  →  /m2_next（收尾）  →（要發版才）/m2_release
+寫完 code  →  /m2_review  →  修 Blocker  →  /m2_smoketest  →  /m2_pr  →  你按 Confirm merge  →  /m2_next（收尾）  →（要發版才）/m2_release
 ```
+
+`/m2_smoketest` 只在「這個專案是使用者會安裝並執行的 App」時需要；純庫房、純設定專案可以跳過。
+它不 commit、不 push、不開 PR，也 **不修 App 的 bug** —— 只把問題列清楚交回你。
 
 `/m2_evo` 是**旁支**，不在主流程上：它在 `evolve/*` 分支上累積 commit，回合結束後再交給 `/m2_pr`。
 
 版號規則：patch 逐一遞增，滿 9 進位到 minor。
 `0.3.0 → 0.3.1`、`0.3.9 → 0.4.0`、`0.9.9 → 1.0.0`
 
-五支指令都有「停下來等你確認」的節點。特別注意：**回覆「OK」不算合併授權**，
-必須明確回 `confirm merge` 或自己按 GitHub 上的按鈕。
+六支指令都有「停下來等你確認」的節點（`/m2_smoketest` 在「要不要補測試」與「要不要動系統層」也會停）。
+特別注意：**回覆「OK」不算合併授權**，必須明確回 `confirm merge` 或自己按 GitHub 上的按鈕。
 
 ### 全自動：指令後面加 `auto`
 
@@ -46,7 +50,8 @@ agent 自行判斷每個確認節點的最優解，一路跑到任務完成，�
 /m2_pr draft auto      可與其他參數並用（如 /m2_release 0.4.1 auto、/m2_next 42 auto）
 ```
 
-- 只有這三支有 `auto`。`/m2_review` 不改狀態；`/m2_evo` 改用 `checkpoint silent`。
+- 只有這三支有 `auto`。`/m2_review` 不改狀態；`/m2_evo` 改用 `checkpoint silent`；
+  `/m2_smoketest` 會實際動到你的機器（安裝、改設定），確認節點不能免除 —— 想少被打擾就用 `/m2_smoketest run`。
 - **必須明打 `auto`** 才生效；說「你直接做」「不用問我」不算。
 - **`auto` 不免掉安全底線**：本機落後 `origin/main`、CI 紅、diff 裡有密鑰、
   tag 已存在、合併衝突、PR 身分查證不過 → 一律**中止並回報**，不猜、不繞過。
@@ -57,7 +62,7 @@ agent 自行判斷每個確認節點的最優解，一路跑到任務完成，�
 ## 目錄結構
 
 `.github/` 就是 source of truth。中央 repo 自己也吃自己的設定，
-所以在這個 repo 裡開 Copilot Chat 就能直接測試五支指令。
+所以在這個 repo 裡開 Copilot Chat 就能直接測試這六支指令。
 
 ```text
 M2_COMMON_AI/
@@ -66,6 +71,7 @@ M2_COMMON_AI/
 │   ├── sync-manifest.txt             ← ★ 同步清單：定義要 sync 哪些路徑
 │   ├── prompts/                      ← slash 指令，打 / 才觸發
 │   │   ├── m2_review.prompt.md       ← /m2_review
+│   │   ├── m2_smoketest.prompt.md    ← /m2_smoketest
 │   │   ├── m2_pr.prompt.md           ← /m2_pr
 │   │   ├── m2_next.prompt.md         ← /m2_next
 │   │   ├── m2_release.prompt.md      ← /m2_release

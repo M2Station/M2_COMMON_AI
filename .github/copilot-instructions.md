@@ -172,6 +172,7 @@ When the user's message matches the semantics below, **read the corresponding pr
 | Trigger semantics | Corresponding file | Description |
 |---|---|---|
 | `review` / `code review` / self review / "check this" / "take a look at these changes" | `.github/prompts/m2_review.prompt.md` | Self code review, **do not modify code** |
+| `smoketest` / `smoke test` / "verify the app" / "does it install and run" / "run the smoke test" / "冒煙測試" / "驗一下裝不裝得起來" / "跑起來有沒有壞" | `.github/prompts/m2_smoketest.prompt.md` | Discover existing `smoketest_script/` -> create it, or extend it based on new features -> review & refine -> execute -> quantified report + explicit bug list. Covers install / runtime / settings / UX / performance. **Only edits `smoketest_script/`; never fixes app code** |
 | `pr` / `PR` / "open PR" / "submit for review" / `open pull request` | `.github/prompts/m2_pr.prompt.md` | Open PR -> monitor CI every 3 seconds -> remind the user to confirm the merge |
 | `next` / `cleanup` / "wrap up" / "clean up branches" / "back to main" / "ready for next" / "收尾" / "準備下一輪" | `.github/prompts/m2_next.prompt.md` | Post-merge cleanup -> delete merged branch, sync main, verify clean tree, ready for next |
 | `release` / "ship a version" / "publish a new version" / "cut a release" / `bump version` | `.github/prompts/m2_release.prompt.md` | Version bump -> PR -> merge -> tag -> CI publish |
@@ -180,13 +181,14 @@ When the user's message matches the semantics below, **read the corresponding pr
 
 ### Routing Rules
 
-- Standard flow order: `/m2_review` -> fix -> `/m2_pr` -> user confirms merge -> `/m2_next` (cleanup) -> `/m2_release` when cutting a version.
+- Standard flow order: `/m2_review` -> fix -> (`/m2_smoketest` when the deliverable is an app users install and run) -> `/m2_pr` -> user confirms merge -> `/m2_next` (cleanup) -> `/m2_release` when cutting a version.
 - If the user only says "release" without specifying a version -> compute the next version per the prompt file rules, report it, then execute.
 - When no prompt file matches, **do not invent a release or PR flow** - ask first.
 - When a prompt file's rules conflict with this file, **the prompt file takes precedence** (it is the dedicated spec for that task).
 - **Appendix A of `m2_release.prompt.md` is a specification, not a flow**: read it only when building/changing build & release CI or installer scripts (or porting the spec to another repo). A routine version release uses sections 1-5 only and must NOT touch the workflow.
+- `/m2_smoketest` is **verification-only**: it never commits, pushes, opens a PR, or edits app code - it only writes under `smoketest_script/`, and only after per-item confirmation. Route to it before `/m2_pr` or before `/m2_release`, and whenever the user asks whether the app still installs / launches / performs.
 - `/m2_evo` is **orthogonal to the standard flow**: it produces commits on a dedicated `evolve/*` branch and deliberately never opens or merges a PR itself. When a round ends, hand off to `/m2_pr` as usual.
-- The four flow prompts (`m2_review` / `m2_pr` / `m2_next` / `m2_release`) each have a "stop and wait for user confirmation" node; do not skip it for the sake of a smooth flow. **The only exception is auto mode below, and only when the user typed `auto` explicitly.**
+- The five flow prompts (`m2_review` / `m2_smoketest` / `m2_pr` / `m2_next` / `m2_release`) each have a "stop and wait for user confirmation" node; do not skip it for the sake of a smooth flow. **The only exception is auto mode below, and only when the user typed `auto` explicitly.**
 
 ### Auto Mode (`<command> auto`)
 
@@ -196,8 +198,10 @@ workflow + result report at the end instead of stopping mid-flow.
 
 - `auto` is a trailing modifier and composes with existing arguments:
   `/m2_pr auto`, `/m2_pr draft auto`, `/m2_next 42 auto`, `/m2_release 0.4.1 auto`.
-- **Only these three support `auto`.** `/m2_review` changes no state (nothing to confirm) and
-  `/m2_evo` already has `checkpoint silent`; do not invent an `auto` mode for them.
+- **Only these three support `auto`.** `/m2_review` changes no state (nothing to confirm),
+  `/m2_evo` already has `checkpoint silent`, and `/m2_smoketest` physically touches the user's machine
+  (install and settings tests), so its confirmation nodes cannot be waived - use `/m2_smoketest run`
+  for a low-interruption pass instead. Do not invent an `auto` mode for any of them.
 - Without a literal `auto`, the interactive confirmation nodes remain mandatory.
   **Never infer auto mode** from phrases like "just do it" or "don't ask me".
 

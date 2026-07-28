@@ -12,6 +12,44 @@
 
 ---
 
+## v3.1.0 — 2026-07-28
+
+### 新增
+
+- **新增 `/m2_smoketest`（`.github/prompts/m2_smoketest.prompt.md`）** — App 基本驗證全流程：
+  探索既有 smoke test → 建立或依新功能補測試 → review／精修腳本 → 實際執行 → 量化報告 + 明確 bug 清單。
+  - **約定目錄 `smoketest_script/`**。流程第一步一定先探索，判定為
+    「不存在 → 建立」／「已存在 → 缺口分析後補測試」／「存在但在別處 → 用按鈕問，不另起爐灶」。
+  - 覆蓋五個面向並以 `SMK-<AREA>-<NNN>` 編號：**安裝 INS／執行 RUN／設定 CFG／體驗 UX／效能 PERF**。
+  - **缺口分析不憑印象**：以 `git log -1 -- smoketest_script` 找出腳本上次更新後的 diff，
+    依訊號（新 CLI 參數、新設定項、新頁面、安裝變更、新相依、schema 變更、修過的 bug）對照該補哪些案例，
+    先輸出覆蓋缺口表並按鈕確認才動手。
+  - **輸出契約 `result.json`**（`summary` / `cases` / `metrics` 欄位固定）——
+    報告一律以它為資料來源，不靠讀 stdout 猜；退出碼 `0` 全過／`1` 有 fail／`2` 腳本或環境本身壞。
+  - **量化報告**：總通過率 + 各面向 PASS/FAIL/FLAKY/SKIP/MANUAL 表 + 效能 vs 基準 + 環境還原結果 +
+    二選一結論（可放行／不可放行）。通過率分母**不含 `manual`**，但 manual 數量必須出現。
+  - **環境安全**：安裝／設定測試視為破壞性動作 —— 一律在可還原的隔離環境進行、事前備份真實設定、
+    事後還原並回報還原結果；要動系統層（登錄檔／服務／驅動／憑證／防火牆）必須先 beep + 按鈕確認。
+  - **絕不作弊**：不得放寬門檻、註解掉案例、弱化斷言、加 `-ErrorAction SilentlyContinue` 製造假通過；
+    `manual`／`skip`／`flaky` 一律不算通過；效能必須至少 3 次取中位數，單次量測不得下結論；
+    首次執行只寫 baseline 並標「不做回歸判定」。
+  - **範圍**：只改 `smoketest_script/` 底下的東西且逐項確認；**不修 App 的 bug**、不改 CI workflow、
+    不 commit／不 push／不開 PR —— 交給 `/m2_review` → `/m2_pr`。
+  - 子指令：`scan`（唯讀缺口分析）／`init`（只建不跑）／`review`（只審）／`run`（只跑不改）／`<路徑>`。
+  - **不支援 `auto`**：安裝與設定測試會實際動到使用者機器，確認節點不可免除；
+    想少被打擾請用 `/m2_smoketest run`。
+
+### 變更
+
+- **`copilot-instructions.md` §9**：路由表新增 `/m2_smoketest`；標準流程順序改為
+  `/m2_review` → 修 → （`/m2_smoketest`，當交付物是使用者要安裝執行的 App）→ `/m2_pr` → `/m2_next` → `/m2_release`；
+  Auto Mode 章節補上「`/m2_smoketest` 不支援 `auto`」的理由。
+- **`README.md`**：指令表、串接流程圖、`auto` 說明與目錄樹一併加入 `/m2_smoketest`。
+
+> **下游 repo 影響**：純新增，既有五支指令行為完全不變。同步後 Copilot Chat 打 `/` 會多一支 `/m2_smoketest`。
+
+---
+
 ## v3.0.0 — 2026-07-27
 
 ### 破壞性變更

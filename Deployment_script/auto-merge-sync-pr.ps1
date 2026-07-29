@@ -9,16 +9,21 @@
 
     對每個 PR 依序執行：
       1. approve  （已 approve 或 PR 是自己開的則略過；GitHub 不允許 approve 自己的 PR）
-      2. 等待可合併（BEHIND 會自動 update-branch；UNKNOWN 會重查；DIRTY 衝突則跳過）
-      3. merge    （預設 squash + 刪分支；被分支保護擋住時自動改用 --admin 強制合併）
-      4. 驗證     （重新查詢直到 state = MERGED，並回報 merge commit）
+      2. 核准 run （自動核准卡在「Approve workflows to run」的 workflow run，
+                   否則 required check 永遠不會回報，PR 會一直停在 BLOCKED）
+      3. 等待可合併（BEHIND 會自動 update-branch；UNKNOWN 會重查；DIRTY 衝突則跳過）
+      4. merge    （預設 squash + 刪分支；被分支保護擋住時自動改用 --admin 強制合併）
+      5. 驗證     （重新查詢直到 state = MERGED，並回報 merge commit）
     全程顯示進度（第幾個 / 共幾個、目前階段、已等待秒數）。
 
     預設只掃描回報（dry-run），不 approve、不 merge。加上 -Apply 才會真的動作。
 
-    為什麼需要這支腳本：自動 PR 由 GITHUB_TOKEN 開出，GitHub 為防遞迴不會觸發下游的
-    on: pull_request 檢查；若該 check 被設為 required，PR 會永遠停在 BLOCKED，
-    只能由具 admin 權限的人強制合併 —— 這正是本腳本 --admin 後援的用途。
+    為什麼需要這支腳本：自動 PR 由 GITHUB_TOKEN／github-actions[bot] 開出，下游的
+    on: pull_request 檢查會被 GitHub 擋成「等待維護者核准」（run 的 conclusion =
+    action_required），或根本不觸發。兩種情況下 required check 都不會回報：
+      - 沒觸發        -> 只能由具 admin 權限的人強制合併（本腳本 --admin 後援）
+      - 等待核准中    -> 連 --admin 都會被 ruleset 以「required status checks are
+                        expected」擋下，必須先核准 run（本腳本自動處理）
 
     只使用本機 gh 的登入身分，不需要任何額外 token / secret。
 
@@ -49,8 +54,15 @@
 .PARAMETER NoAdmin
     停用 --admin 後援；被分支保護擋住時直接回報失敗，不強制合併。
 
+.PARAMETER NoRunApprove
+    停用「自動核准等待中的 workflow run」。預設會自動核准（等同 GitHub PR 頁上的
+    Approve workflows to run 按鈕），讓 required check 真的跑起來。
+
 .PARAMETER TimeoutSeconds
     單一 PR 等待「可合併」的上限秒數。預設 180。
+
+.PARAMETER CheckWaitSeconds
+    核准 workflow run 之後額外延長的等待秒數，讓 CI 有時間跑完。預設 300。
 
 .EXAMPLE
     # 只掃描，看看有哪些自動 PR 待處理
@@ -76,14 +88,16 @@ param(
     [switch]$Apply,
     [switch]$NoApprove,
     [switch]$NoAdmin,
-    [int]$TimeoutSeconds = 180
+    [switch]$NoRunApprove,
+    [int]$TimeoutSeconds = 180,
+    [int]$CheckWaitSeconds = 300
 )
 
 $ErrorActionPreference = 'Stop'
 
 # gh pr view 需要的欄位；mergeStateStatus 是判斷「能不能合併」的關鍵。
 $PrFields = 'number,title,url,state,isDraft,mergeable,mergeStateStatus,reviewDecision,' +
-            'statusCheckRollup,headRefName,baseRefName,author,mergeCommit,mergedAt'
+            'statusCheckRollup,headRefName,headRefOid,baseRefName,author,mergeCommit,mergedAt'
 
 # 可以直接進入合併的狀態：
 #   CLEAN     一切就緒
@@ -143,19 +157,74 @@ function Get-FailedCheck {
     return $bad
 }
 
+# 找出卡在「Approve workflows to run」的 workflow run。
+# 這類 run 的 status = waiting / action_required，或 status = completed 但
+# conclusion = action_required；它們不會產生 check 結果，required check 因此
+# 永遠停在 Expected，PR 卡死在 BLOCKED。
+function Get-PendingRun {
+    param([string]$TargetRepo, [string]$HeadSha)
+    if (-not $HeadSha) { return @() }
+    $jq = '.workflow_runs[] | select(.status == "waiting" or .status == "action_required" ' +
+          'or .conclusion == "action_required") | "\(.id)\t\(.name)"'
+    $r = Invoke-Gh @('api', "repos/$TargetRepo/actions/runs?head_sha=$HeadSha&per_page=100", '--jq', $jq)
+    if ($r.ExitCode -ne 0) {
+        Write-Sub "runs     查詢 workflow run 失敗：$($r.Text -replace '\s+', ' ')"
+        return @()
+    }
+    if (-not $r.Text) { return @() }
+    $runs = @()
+    foreach ($line in ($r.Text -split "`r?`n")) {
+        if (-not $line.Trim()) { continue }
+        $parts = $line -split "`t", 2
+        $runs += [pscustomobject]@{
+            Id   = $parts[0].Trim()
+            Name = if ($parts.Count -gt 1 -and $parts[1].Trim()) { $parts[1].Trim() } else { '(unnamed)' }
+        }
+    }
+    return $runs
+}
+
+# 逐一核准等待中的 workflow run（等同 PR 頁上的 Approve workflows to run）；回傳成功核准數。
+function Approve-PendingRun {
+    param([string]$TargetRepo, [string]$HeadSha)
+    $approved = 0
+    foreach ($run in @(Get-PendingRun -TargetRepo $TargetRepo -HeadSha $HeadSha)) {
+        $a = Invoke-Gh @('api', '-X', 'POST', "repos/$TargetRepo/actions/runs/$($run.Id)/approve")
+        if ($a.ExitCode -eq 0) {
+            Write-Sub "runs     已核准 workflow run：$($run.Name)（run $($run.Id)）"
+            $approved++
+        }
+        else {
+            Write-Sub "runs     核准失敗：$($run.Name)（run $($run.Id)）$($a.Text -replace '\s+', ' ')"
+        }
+    }
+    return $approved
+}
+
 # 等到 PR 進入可合併狀態；回傳最後一次查到的 detail。
 # BEHIND 會自動 update-branch（只做一次，避免無限迴圈）。
+# BLOCKED 時會嘗試核准等待中的 workflow run；真的核准到才延長等待時間讓 CI 跑完。
 function Wait-PrMergeable {
-    param([string]$TargetRepo, [int]$Number, [int]$MaxSeconds, [string]$ProgressPrefix)
+    param(
+        [string]$TargetRepo, [int]$Number, [int]$MaxSeconds, [string]$ProgressPrefix,
+        [switch]$NoRunApprove, [int]$ExtraSecondsAfterApprove = 300
+    )
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $updated = $false
     $lastState = ''
+    $deadline = $MaxSeconds
+    $extended = $false
+    # 在這些「已等待秒數」各嘗試核准一次；run 有時會晚幾秒才建立，故不只試一次。
+    $approveAt = @(0, 15, 45)
+    $approveIdx = 0
     while ($true) {
         $d = Get-PrDetail -TargetRepo $TargetRepo -Number $Number
         $st = "$($d.mergeStateStatus)"
         if ($d.state -ne 'OPEN') { return $d }
         if ($st -in $ReadyStates) { return $d }
         if ($st -eq 'DIRTY' -or $st -eq 'DRAFT') { return $d }
+
+        $elapsed = [int]$sw.Elapsed.TotalSeconds
 
         if ($st -eq 'BEHIND' -and -not $updated) {
             Write-Sub 'wait     BEHIND -> 自動 update-branch'
@@ -164,15 +233,26 @@ function Wait-PrMergeable {
             if ($u.ExitCode -ne 0) { Write-Sub "wait     update-branch 失敗：$($u.Text)" }
         }
 
-        $elapsed = [int]$sw.Elapsed.TotalSeconds
-        if ($elapsed -ge $MaxSeconds) { return $d }
+        if ($st -eq 'BLOCKED' -and -not $NoRunApprove -and
+            $approveIdx -lt $approveAt.Count -and $elapsed -ge $approveAt[$approveIdx]) {
+            $approveIdx++
+            $n = Approve-PendingRun -TargetRepo $TargetRepo -HeadSha "$($d.headRefOid)"
+            if ($n -gt 0 -and -not $extended) {
+                $deadline = $MaxSeconds + $ExtraSecondsAfterApprove
+                $extended = $true
+                Write-Sub "wait     已放行 $n 個 workflow，等待上限延長為 ${deadline}s"
+                $lastState = ''
+            }
+        }
+
+        if ($elapsed -ge $deadline) { return $d }
         if ($st -ne $lastState) {
-            Write-Sub "wait     $st ... 等待中（上限 ${MaxSeconds}s）"
+            Write-Sub "wait     $st ... 等待中（上限 ${deadline}s）"
             $lastState = $st
         }
         Write-Progress -Id 2 -ParentId 1 -Activity $ProgressPrefix `
-            -Status "等待可合併：$st（已等待 ${elapsed}s / ${MaxSeconds}s）" `
-            -PercentComplete ([math]::Min(100, [int]($elapsed * 100 / [math]::Max(1, $MaxSeconds))))
+            -Status "等待可合併：$st（已等待 ${elapsed}s / ${deadline}s）" `
+            -PercentComplete ([math]::Min(100, [int]($elapsed * 100 / [math]::Max(1, $deadline))))
         Start-Sleep -Seconds 3
     }
 }
@@ -235,6 +315,7 @@ if ($targets.Count -eq 0) {
 Write-Ok "待處理 repo：$($targets.Count) 個"
 Write-Info "目標分支：$($Branch -join '、')"
 Write-Info "合併方式：$MergeMethod$(if (-not $NoAdmin) { '（卡住時自動 --admin）' })"
+Write-Info "workflow run：$(if ($NoRunApprove) { '不自動核准（-NoRunApprove）' } else { '自動核准等待中的 run' })"
 if (-not $Apply) {
     Write-Warn '目前為掃描模式（dry-run），不會 approve 也不會 merge；加上 -Apply 才會實際執行'
 }
@@ -309,7 +390,15 @@ foreach ($t in $targets) {
             if ($failed.Count -gt 0) { Write-Sub "checks   失敗：$($failed -join '、')" }
 
             if (-not $Apply) {
+                $waiting = @()
+                if ($d.mergeStateStatus -eq 'BLOCKED') {
+                    $waiting = @(Get-PendingRun -TargetRepo $t -HeadSha "$($d.headRefOid)")
+                    if ($waiting.Count -gt 0) {
+                        Write-Sub "runs     $($waiting.Count) 個 workflow 等待核准：$(($waiting.Name) -join '、')"
+                    }
+                }
                 $plan = if ($d.mergeStateStatus -eq 'DIRTY') { '有衝突，需先手動處理' }
+                        elseif ($waiting.Count -gt 0) { "將核准 $($waiting.Count) 個 workflow run 後 approve + merge" }
                         elseif ($d.reviewDecision -eq 'APPROVED') { '已 approve，將直接 merge' }
                         else { '將 approve + merge' }
                 Write-Info "  預計動作：$plan"
@@ -343,8 +432,9 @@ foreach ($t in $targets) {
                 }
             }
 
-            # ---- 2. 等待可合併 ----
-            $d = Wait-PrMergeable -TargetRepo $t -Number $num -MaxSeconds $TimeoutSeconds -ProgressPrefix $prefix
+            # ---- 2. 等待可合併（途中會自動核准等待中的 workflow run）----
+            $d = Wait-PrMergeable -TargetRepo $t -Number $num -MaxSeconds $TimeoutSeconds `
+                -ProgressPrefix $prefix -NoRunApprove:$NoRunApprove -ExtraSecondsAfterApprove $CheckWaitSeconds
             Write-Progress -Id 2 -ParentId 1 -Activity $prefix -Completed
 
             if ($d.state -eq 'MERGED') {
@@ -395,6 +485,10 @@ foreach ($t in $targets) {
             if ($mg.ExitCode -ne 0) {
                 $msg = ($mg.Text -replace '\s+', ' ')
                 Write-Warn "  合併失敗：$msg"
+                if ($msg -match 'required status checks are expected') {
+                    Write-Sub 'hint     required check 尚未回報（可能尚在跑或仍等待核准）；'
+                    Write-Sub 'hint     請稍候重跑，或加大 -TimeoutSeconds / -CheckWaitSeconds。'
+                }
                 $results.Add([pscustomobject]@{
                         Repo = $t; PR = $prTag; Branch = $p.headRefName; Result = 'FAILED'; Detail = $msg
                     })

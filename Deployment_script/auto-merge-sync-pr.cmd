@@ -30,6 +30,7 @@ echo ============================================================
 echo   清單檔 : %REPOFILE%
 echo   引擎   : %PS%
 echo   對象   : chore/sync-m2-common-ai + chore/upgrade-sync-workflow
+echo   附帶   : 自動核准卡住的 workflow run（Approve workflows to run）
 echo ------------------------------------------------------------
 echo   [1] 掃描   只列出待處理的自動 PR，不動任何 PR（安全）
 echo   [2] 執行   approve + squash merge + 驗證 MERGED
@@ -56,7 +57,7 @@ goto menu
 
 :apply
 echo.
-echo === 執行模式：approve + squash merge，被分支保護擋住時自動 --admin 強制合併 ===
+echo === 執行模式：核准待核准的 workflow + approve + squash merge，被分支保護擋住時自動 --admin 強制合併 ===
 choice /c YN /n /m "確定要繼續? [Y/N]: "
 if errorlevel 2 goto menu
 echo.

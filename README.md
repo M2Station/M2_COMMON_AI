@@ -19,6 +19,7 @@
 | `/m2_pr` | 開 PR → 每 3 秒輪詢 CI → 全過時提醒你確認合併 | 不會 |
 | `/m2_next` | PR 合併後收尾：刪已合併分支、回到並更新 main、確認乾淨、備妥下一輪 | 只清理分支/切 main |
 | `/m2_release` | 算版號 → bump PR → merge → tag → CI 發布 | 只改版本號 |
+| `/m2_push_release_auto` | 無人職守：自動 commit 目前變更 → `/m2_pr auto` 合併 → `/m2_release auto` 發版 → 驗證 GitHub Release | 會 commit 已追蹤變更與本次新增的檔案 + 改版本號 |
 | `/m2_evo` | 長時間自主迭代優化：12h 預算內不斷「找改進點 → 改 → 驗證 → 收或退」 | 會（只在 `evolve/*` 分支，每筆都驗證過才 commit） |
 
 建議串接使用：
@@ -32,10 +33,21 @@
 
 `/m2_evo` 是**旁支**，不在主流程上：它在 `evolve/*` 分支上累積 commit，回合結束後再交給 `/m2_pr`。
 
+目前變更要一路無人職守發布時，可直接使用：
+
+```text
+/m2_push_release_auto  →  自動 commit 目前變更  →  /m2_pr auto  →  同步 main  →  /m2_release auto  →  GitHub Release
+```
+
+在 `main` 上打這支指令時，它會先依分支慣例開一個 `feature/`／`fix/`／`chore/` 分支再提交，
+不會在 `main` 上 commit。新增的檔案會**逐一明列路徑**加入（不用 `git add -A`），
+`.env`、log、建置產物等無關的未追蹤檔則不會被帶進去。
+
 版號規則：patch 逐一遞增，滿 9 進位到 minor。
 `0.3.0 → 0.3.1`、`0.3.9 → 0.4.0`、`0.9.9 → 1.0.0`
 
-六支指令都有「停下來等你確認」的節點（`/m2_smoketest` 在「要不要補測試」與「要不要動系統層」也會停）。
+除固定全自動的 `/m2_push_release_auto` 外，其餘六支指令都有「停下來等你確認」的節點
+（`/m2_smoketest` 在「要不要補測試」與「要不要動系統層」也會停）。
 特別注意：**回覆「OK」不算合併授權**，必須明確回 `confirm merge` 或自己按 GitHub 上的按鈕。
 
 ### 全自動：指令後面加 `auto`
@@ -48,9 +60,11 @@ agent 自行判斷每個確認節點的最優解，一路跑到任務完成，�
 /m2_next auto          自行收尾（雙重查證合併 → 回 main → 刪本次分支）
 /m2_release auto       bump → PR → CI 綠 → 合併 → tag → push
 /m2_pr draft auto      可與其他參數並用（如 /m2_release 0.4.1 auto、/m2_next 42 auto）
+/m2_push_release_auto  固定全自動串接 m2_pr auto 與 m2_release auto
 ```
 
-- 只有這三支有 `auto`。`/m2_review` 不改狀態；`/m2_evo` 改用 `checkpoint silent`；
+- 只有前三支接受後置 `auto`；`/m2_push_release_auto` 本身就是固定的全自動指令，不需再加參數。
+  `/m2_review` 不改狀態；`/m2_evo` 改用 `checkpoint silent`；
   `/m2_smoketest` 會實際動到你的機器（安裝、改設定），確認節點不能免除 —— 想少被打擾就用 `/m2_smoketest run`。
 - **必須明打 `auto`** 才生效；說「你直接做」「不用問我」不算。
 - **`auto` 不免掉安全底線**：本機落後 `origin/main`、CI 紅、diff 裡有密鑰、
@@ -62,7 +76,7 @@ agent 自行判斷每個確認節點的最優解，一路跑到任務完成，�
 ## 目錄結構
 
 `.github/` 就是 source of truth。中央 repo 自己也吃自己的設定，
-所以在這個 repo 裡開 Copilot Chat 就能直接測試這六支指令。
+所以在這個 repo 裡開 Copilot Chat 就能直接測試這七支指令。
 
 ```text
 M2_COMMON_AI/
@@ -75,6 +89,7 @@ M2_COMMON_AI/
 │   │   ├── m2_pr.prompt.md           ← /m2_pr
 │   │   ├── m2_next.prompt.md         ← /m2_next
 │   │   ├── m2_release.prompt.md      ← /m2_release
+│   │   ├── m2_push_release_auto.prompt.md ← /m2_push_release_auto
 │   │   └── m2_evo.prompt.md          ← /m2_evo
 │   ├── instructions/                 ← 分領域規範（applyTo glob），目前為空
 │   └── workflows/

@@ -12,6 +12,32 @@
 
 ---
 
+## v3.2.0 — 2026-07-30
+
+### 新增
+
+- **新增 `/m2_push_release_auto`（`.github/prompts/m2_push_release_auto.prompt.md`）** — 固定無人職守串接：
+  目前分支已 commit 的變更走 `/m2_pr auto` → 查證 PR 已合併並同步乾淨的 `main` →
+  執行 `/m2_release auto` → 驗證 tag、publish workflow 與 GitHub Release 頁面。
+  - 不彈確認按鈕、不等待人工決策，也不額外執行 `/m2_next`。
+  - **未 commit 的已追蹤變更由 agent 自動提交**（`git add -u`）；本次功能新增的檔案須**逐一明列路徑**才加入，
+    禁用 `git add -A`、`git add .` 與萬用字元，且一律排除 `.env*`、金鑰、log、快取與建置產物。
+    在 `main` 上時先依分支慣例開 `feature/`／`fix/`／`chore/` 分支再提交。
+    staged diff 掃到機密資料即中止且不提交。
+  - 任一底層 ABORT 條件仍然有效；CI 紅、分支落後、PR 身分不明、tag 衝突或 Release 未建立時停止並如實回報。
+  - 最終以單一報告列出兩個 PR、merge SHA、版號、tag、CI/publish run 與 GitHub Release URL。
+
+### 變更
+
+- **`copilot-instructions.md` §9**：新增 `/m2_push_release_auto` routing，並區分「三支接受後置 `auto`」與
+  「固定全自動 orchestrator」的授權契約。
+- **`README.md`**：新增指令用途、串接流程、auto 說明與目錄樹項目。
+
+> **下游 repo 影響**：純新增，既有六支 prompt 行為不變。同步後 Copilot Chat 打 `/` 會多一支
+> `/m2_push_release_auto`。
+
+---
+
 ## v3.1.0 — 2026-07-28
 
 ### 新增

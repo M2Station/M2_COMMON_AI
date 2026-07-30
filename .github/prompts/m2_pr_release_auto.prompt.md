@@ -3,9 +3,9 @@ description: Fully unattended delivery: run /m2_pr auto for the current committe
 mode: agent
 ---
 
-# Push And Release Auto
+# PR And Release Auto
 
-**觸發**：`/m2_push_release_auto`、`push release auto`、`PR 合併後自動發版`、`無人職守推送並發布`
+**觸發**：`/m2_pr_release_auto`、`pr release auto`、`PR 合併後自動發版`、`無人職守推送並發布`
 
 這是一支固定為全自動的 orchestration prompt。依序執行：
 
@@ -32,7 +32,7 @@ mode: agent
 
 ## 1. 執行目前變更的 PR
 
-將使用者輸入 `/m2_push_release_auto` 視為已明確授權第一階段使用 `auto`。
+將使用者輸入 `/m2_pr_release_auto` 視為已明確授權第一階段使用 `auto`。
 
 ### 1.1 自動提交未 commit 的變更
 
@@ -105,7 +105,7 @@ git rev-list --left-right --count origin/main...HEAD
 正常執行期間只提供必要的 CI 心跳；不要求使用者輸入。完成或 ABORT 後嗶一聲，輸出一份合併報告：
 
 ```markdown
-## /m2_push_release_auto 結果
+## /m2_pr_release_auto 結果
 
 - 結果：完成 / ABORT
 - 第一階段 PR：<url>｜merge SHA：<sha>｜CI：<result + run url>

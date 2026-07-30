@@ -16,7 +16,7 @@
 
 ### 新增
 
-- **新增 `/m2_push_release_auto`（`.github/prompts/m2_push_release_auto.prompt.md`）** — 固定無人職守串接：
+- **新增 `/m2_pr_release_auto`（`.github/prompts/m2_pr_release_auto.prompt.md`）** — 固定無人職守串接：
   目前分支已 commit 的變更走 `/m2_pr auto` → 查證 PR 已合併並同步乾淨的 `main` →
   執行 `/m2_release auto` → 驗證 tag、publish workflow 與 GitHub Release 頁面。
   - 不彈確認按鈕、不等待人工決策，也不額外執行 `/m2_next`。
@@ -29,12 +29,12 @@
 
 ### 變更
 
-- **`copilot-instructions.md` §9**：新增 `/m2_push_release_auto` routing，並區分「三支接受後置 `auto`」與
+- **`copilot-instructions.md` §9**：新增 `/m2_pr_release_auto` routing，並区分「三支接受後置 `auto`」與
   「固定全自動 orchestrator」的授權契約。
 - **`README.md`**：新增指令用途、串接流程、auto 說明與目錄樹項目。
 
 > **下游 repo 影響**：純新增，既有六支 prompt 行為不變。同步後 Copilot Chat 打 `/` 會多一支
-> `/m2_push_release_auto`。
+> `/m2_pr_release_auto`。
 
 ---
 
